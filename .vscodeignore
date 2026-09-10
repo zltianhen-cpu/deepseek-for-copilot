@@ -5,6 +5,10 @@ src/**
 test/**
 tools/**
 design/**
+# 文档配图不进包。README 的相对路径图片会被 vsce 改写为 GitHub 直链，
+# 商店页从 GitHub 取图，无需打进 vsix。
+resources/screenshots/**
+resources/icon@512.png
 out/**/*.map
 out/**/*.d.ts
 out/**/*.d.ts.map

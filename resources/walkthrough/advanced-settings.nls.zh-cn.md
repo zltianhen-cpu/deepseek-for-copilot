@@ -10,4 +10,4 @@
 
 这个设置可能通过让 DeepSeek API 的 `tools` 参数在多轮对话中更完整、更稳定来提高缓存命中率。代价是每次请求可能包含更多函数工具定义，因此 input tokens 可能增加。
 
-[打开插件设置](command:workbench.action.openSettings?%5B%22%40id%3Adeepseek-copilot.experimental.stabilizeToolList%22%5D)
+[打开插件设置](command:workbench.action.openSettings?%5B%22%40id%3Adeepseek-fork.experimental.stabilizeToolList%22%5D)

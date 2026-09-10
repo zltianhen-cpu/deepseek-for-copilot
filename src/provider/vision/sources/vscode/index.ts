@@ -1,4 +1,5 @@
 import vscode from 'vscode';
+import { CONFIG_SECTION } from '../../../../consts';
 import { t } from '../../../../i18n';
 import { DEFAULT_VISION_MODEL_ID, IMAGE_DESCRIPTION_PROMPT } from '../../consts';
 import { logVSCodeVisionModelNotFound, logVSCodeVisionModelSelected } from '../../log';
@@ -14,7 +15,7 @@ const EXCLUDED_VISION_MODEL_IDS = new Set([
 	'copilot-utility-small',
 	// 这里只能排除「不能／不该当代理」的模型。
 	// ⛔ 绝不能把 DEFAULT_VISION_MODEL_ID（deepseek-flash）放进来：
-	//    它与 isDeepSeekVisionExpModel() 的允许判定是「与」关系，
+	//    它与 isDefaultVisionProxyModel() 的允许判定是「与」关系，
 	//    一旦排除，代理就找不到任何 deepseek 模型 → V4 Pro 看图直接坏掉。
 	'deepseek-v4-pro',
 ]);
@@ -112,10 +113,10 @@ export class VSCodeLanguageModelVisionDescriber implements VisionDescriber {
 		] as (vscode.LanguageModelDataPart | vscode.LanguageModelTextPart)[]);
 
 		// Keep the user-facing default reasoning effort for the main chat model, but
-		// disable thinking for the internal Vision Exp proxy pass. This is a serial
-		// preprocessing step, so the extra latency and cost should not be paid unless
-		// the user explicitly asks for it in the primary model configuration.
-		const requestOptions = isDeepSeekVisionExpModel(this.model)
+		// disable thinking for the internal Vision Proxy pass (deepseek-flash). This is
+		// a serial preprocessing step, so the extra latency and cost should not be paid
+		// unless the user explicitly asks for it in the primary model configuration.
+		const requestOptions = isDefaultVisionProxyModel(this.model)
 			? { modelOptions: { reasoningEffort: 'none' as const } }
 			: {};
 		const response = await this.model.sendRequest([visionMsg], requestOptions, request.token);
@@ -130,14 +131,14 @@ export class VSCodeLanguageModelVisionDescriber implements VisionDescriber {
 }
 
 export function getVisionPrompt(): string {
-	const config = vscode.workspace.getConfiguration('deepseek-copilot');
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 	return (
 		config.get<string>('visionPrompt', IMAGE_DESCRIPTION_PROMPT).trim() || IMAGE_DESCRIPTION_PROMPT
 	);
 }
 
 export function getConfiguredVisionModelKey(): string | undefined {
-	const config = vscode.workspace.getConfiguration('deepseek-copilot');
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 	const key = config.get<string>('visionModel', '');
 	return key.trim() || undefined;
 }
@@ -151,7 +152,7 @@ export async function saveVSCodeVisionModelKey(key: string): Promise<void> {
 	if (!normalizedKey) {
 		throw new Error(t('vision.panel.error.required', t('vision.panel.source.vscodeLm')));
 	}
-	const config = vscode.workspace.getConfiguration('deepseek-copilot');
+	const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 	await config.update('visionModel', normalizedKey, vscode.ConfigurationTarget.Global);
 }
 
@@ -188,8 +189,8 @@ export function pickPreferredVSCodeVisionModelKey(
 		// quietly replacing the user's current selection with the automatic default.
 		return undefined;
 	}
-	// In auto mode, require an exact Vision Exp match and do not fall back to
-	// arbitrary options to keep the default path deterministic.
+	// In auto mode, require an exact DEFAULT_VISION_MODEL_ID match and do not fall
+	// back to arbitrary options to keep the default path deterministic.
 	const preferred = options.find(
 		(model) => model.vendor === 'deepseek' && model.id === DEFAULT_VISION_MODEL_ID,
 	);
@@ -224,13 +225,11 @@ function pickPreferredVSCodeVisionModel(
 }
 
 function isVSCodeVisionModel(model: vscode.LanguageModelChat): boolean {
-	// Keep a narrow DeepSeek exception: allow Vision Exp as proxy, but continue
-	// excluding DeepSeek Flash/Pro to avoid recursive self-selection.
-	const isDeepSeekVisionExp = isDeepSeekVisionExpModel(model);
+	// Keep a narrow DeepSeek exception: allow the default vision proxy model, but
+	// continue excluding the other DeepSeek models to avoid recursive self-selection.
+	const isDefaultProxy = isDefaultVisionProxyModel(model);
 	const isVendorAllowed =
-		model.vendor === 'deepseek'
-			? isDeepSeekVisionExp
-			: !EXCLUDED_VISION_MODEL_VENDORS.has(model.vendor);
+		model.vendor === 'deepseek' ? isDefaultProxy : !EXCLUDED_VISION_MODEL_VENDORS.has(model.vendor);
 	return (
 		isVendorAllowed &&
 		!EXCLUDED_VISION_MODEL_IDS.has(model.id) &&
@@ -241,7 +240,9 @@ function isVSCodeVisionModel(model: vscode.LanguageModelChat): boolean {
 	);
 }
 
-function isDeepSeekVisionExpModel(model: Pick<vscode.LanguageModelChat, 'vendor' | 'id'>): boolean {
+function isDefaultVisionProxyModel(
+	model: Pick<vscode.LanguageModelChat, 'vendor' | 'id'>,
+): boolean {
 	return model.vendor === 'deepseek' && model.id === DEFAULT_VISION_MODEL_ID;
 }
 

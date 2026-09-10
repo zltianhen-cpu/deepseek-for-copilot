@@ -1,7 +1,7 @@
 import vscode from 'vscode';
 import { AuthManager } from '../auth';
 import { getBaseUrl, getStabilizeToolListEnabled } from '../config';
-import { MODELS } from '../consts';
+import { API_KEY_SECRET, CONFIG_SECTION, MODELS } from '../consts';
 import { isOfficialDeepSeekBaseUrl, normalizeBaseUrl } from '../endpoint';
 import { t } from '../i18n';
 import { logger } from '../logger';
@@ -60,8 +60,8 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 			// Settings-based fallback API key + base URL changes.
 			vscode.workspace.onDidChangeConfiguration((e) => {
 				if (
-					e.affectsConfiguration('deepseek-copilot.apiKey') ||
-					e.affectsConfiguration('deepseek-copilot.baseUrl')
+					e.affectsConfiguration(`${CONFIG_SECTION}.apiKey`) ||
+					e.affectsConfiguration(`${CONFIG_SECTION}.baseUrl`)
 				) {
 					this.invalidateCurrencyAndRefreshModels();
 				}
@@ -70,7 +70,7 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 			// When another window sets/clears the API key, refresh this window's
 			// model picker so the warning state stays in sync.
 			context.secrets.onDidChange((e) => {
-				if (e.key === 'deepseek-copilot.apiKey') {
+				if (e.key === API_KEY_SECRET) {
 					this.invalidateCurrencyAndRefreshModels();
 				}
 			}),

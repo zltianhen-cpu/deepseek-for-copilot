@@ -1,4 +1,5 @@
 import vscode from 'vscode';
+import { CONFIG_SECTION } from '../../consts';
 import { t } from '../../i18n';
 import { logInvalidVisionProxyApiEndpointConfig, logVisionApiEndpointSelected } from './log';
 import { VISION_PROXY_API_KEY_SECRET, VisionProxyConfigStore } from './sources/endpoint/config';
@@ -27,7 +28,7 @@ export function createVisionService(context: vscode.ExtensionContext): {
 
 	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration((event) => {
-			if (event.affectsConfiguration('deepseek-copilot.visionModel')) {
+			if (event.affectsConfiguration(`${CONFIG_SECTION}.visionModel`)) {
 				reset();
 			}
 		}),

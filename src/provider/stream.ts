@@ -90,7 +90,7 @@ export function streamChatCompletion({
 						setCharsPerToken(charsPerToken);
 					}
 					prepared.cacheDiagnostics.onUsage(usage, charsPerToken);
-					// 自研版内建钩子：真实用量上报（只读）
+					// 本扩展内建钩子：真实用量上报（只读）
 					// 推理 token 只出现在运行时响应里，官方类型未声明 → 安全断言取用
 					const reasoningTokens = (
 						usage as unknown as {

@@ -84,11 +84,14 @@ export async function prepareChatRequest({
 	const resolvedMessages = visionResolution.messages;
 
 	const deepseekMessages = convertMessages(resolvedMessages, isThinkingModel, nativeImageInput);
-	// 自研版内建钩子（顺序不可颠倒：第二个要看到第一个处理后的结果）
-	applyMessageFilter(deepseekMessages);
-	logMessageComposition(deepseekMessages);
-	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
+	// 工具 schema 排在 messages 之前，同属 provider 前缀：schema 一变缓存全断，
+	// 而 system 提示可能一个字没动。故在钩子之前先备好 tools 并交给探针做指纹。
+	// （prepareRequestTools 只依赖 modelDef/options，上移无副作用）
 	const tools = prepareRequestTools(modelDef?.capabilities.toolCalling, options);
+	// 本扩展内建钩子（顺序不可颠倒：第二个要看到第一个处理后的结果）
+	applyMessageFilter(deepseekMessages);
+	logMessageComposition(deepseekMessages, tools);
+	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 
 	const totalRequestChars = countMessageChars(deepseekMessages);
 	const hasNativeImages =

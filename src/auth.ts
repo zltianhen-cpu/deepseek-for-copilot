@@ -1,5 +1,5 @@
 import vscode from 'vscode';
-import { API_KEY_SECRET } from './consts';
+import { API_KEY_SECRET, CONFIG_SECTION } from './consts';
 import { t } from './i18n';
 
 /**
@@ -22,7 +22,7 @@ export class AuthManager {
 			return secretKey;
 		}
 
-		const config = vscode.workspace.getConfiguration('deepseek-copilot');
+		const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
 		const settingsKey = config.get<string>('apiKey');
 		if (settingsKey?.trim()) {
 			return settingsKey.trim();

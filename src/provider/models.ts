@@ -44,12 +44,13 @@ export function toChatInfo(
 	now = new Date(),
 	showPricingNotice = true,
 ): ModelPickerChatInformation {
+	const modelName = resolveModelText(m, 'name') ?? m.name;
 	const modelDetail = resolveModelText(m, 'detail') ?? m.detail;
 	const modelTooltip = resolveModelText(m, 'tooltip');
 	const thinkingCapability = m.capabilities.thinking;
 	return {
 		id: m.id,
-		name: m.name,
+		name: modelName,
 		family: m.family,
 		version: m.version,
 		detail: hasApiKey ? modelDetail : t('auth.apiKeyRequiredDetail'),
@@ -120,9 +121,15 @@ function isSupportedReasoningEffort(
 	return thinkingCapability.supportedEfforts.some((effort) => effort === value);
 }
 
-function resolveModelText(m: ModelDefinition, field: 'detail' | 'tooltip'): string | undefined {
-	const suffix = m.id.startsWith('deepseek-v4-') ? m.id.slice('deepseek-v4-'.length) : m.id;
-	const key = `model.${suffix}.${field}`;
+function resolveModelText(
+	m: ModelDefinition,
+	field: 'name' | 'detail' | 'tooltip',
+): string | undefined {
+	// Key on the full model id. Deriving a short suffix by stripping a
+	// `deepseek-v4-` prefix silently broke translation lookup for ids that do not
+	// match that pattern (e.g. `deepseek-flash`), leaking the hard-coded fallback
+	// text into every locale.
+	const key = `model.${m.id}.${field}`;
 	const translated = t(key);
 	return translated !== key ? translated : undefined;
 }

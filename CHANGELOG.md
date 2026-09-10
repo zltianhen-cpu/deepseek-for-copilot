@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.0.4 (2026-09-10)
+
+模型名纠错 + 图片能力口径修正版本 / Model name correction and image-capability wording fix.
+
+### 修复 / Fixed
+
+* **Flash 的显示名去掉版本号 `V4.1`**：服务端当前接受并回报的模型名就是 `deepseek-flash` —— 实测请求 `deepseek-flash` → 响应 `model` 字段 `deepseek-flash`；而 `deepseek-v4-flash` 是**旧名**（被路由到同一模型）。拿旧名或历史版本号当显示名 = 把历史当现状。现改为 **`DeepSeek Flash（Cache-Aware）`** / **`DeepSeek Flash (Cache-Aware)`**，共 **43 处**（模型名与 tooltip、商店副标题、README 中英、引导文档）。
+* **Pro 的显示名保持不变**：`deepseek-v4-pro` 仍是服务端实际模型名（北京时间 9-14 12:00 前仍是真 V4 Pro），故保留 `DeepSeek V4 Pro（Cache-Aware）`。
+* **改名尺子固化为规则**：显示名**照抄服务端返回的 `model` 字段**，不照抄我们的记忆 —— 服务端改名，我们的界面跟着改。
+* **产物体检扩展「陈旧显示名」断言**：`out/i18n.js` 里出现 `V4.1` / `自研版` / `(Fork)` 任一即判不可外发（沿用 0.0.3 修的那类「陈旧编译产物静默进包」事故，这次把已废弃的版本号也纳入守门）。
+
+* **图片能力口径修正**：原措辞「原生多模态直传 / native multimodal」容易被读成「能出图」。按官方文档客观事实（`deepseek-flash` 支持**图片输入**：描述图片、识别截图文字、分析图表）改为明确口径 —— **图片是「输入」（看图），不是「输出」（不生成图片）**。涉及模型选择器 detail/tooltip、视觉代理面板、README（中/英）、`package.json` 描述、设置项说明共 **31 处**。
+
+## 0.0.3 (2026-09-10)
+
+命名版本 / Naming.
+
+### 变更 / Changed
+
+* **模型名去掉「自研版 / (Fork)」，改为「Cache-Aware」**：旧标签只说「这是谁做的」，不说「好在哪」；且「瘦」方向的词（Slim / Lean / Lite）挂在 `Pro` 后面易被读成「缩水版」。新标签是**能力词而非减配词**，点出本扩展的核心价值 —— **只发送相关技能块（省无效 token）+ 锁定前缀（稳住缓存命中率）**。中英一致：`DeepSeek V4.1 Flash（Cache-Aware）` / `DeepSeek V4 Pro（Cache-Aware）`。
+* **同一标签统一到全部界面**：命令面板标题（`DeepSeek Cache-Aware: …`）、设置项标题、引导文档、README（中/英）、Issue 模板，共 **66 处**。
+* **模型供应商标签去重**：模型选择器原同时显示「DeepSeek 自研版」与「…（自研版）」，标签出现两次。现供应商标签为 `DeepSeek`，标签只出现在模型名上。
+* **模型 tooltip 补上价值说明**（中英各 2 处）：说明「只发相关技能块 + 锁定前缀以稳住命中率」。
+* **版本号 0.0.2 → 0.0.3**：命名变更属用户可见改动；换版本号可避免「同版本号覆盖安装」造成的“改动没生效”歧义。
+* 注：本文件下方 0.0.2 条目里的旧名**保留不改** —— 变更记录是历史，不应改写。
+
+## 0.0.2 (2026-09-10)
+
+文档与界面文案纠错版本 / Documentation and UI text corrections.
+
+### 修复 / Fixed
+
+* **模型信息全面纠错**：README（中/英）、`package.json` 商店副标题、设置项说明（`visionModel` / `visionPrompt` / `debugMode`）、引导文档与 Issue 模板此前仍描述上游的 **3 个**模型（含已移除的 Flash Vision Exp），现统一为实际的两个：**DeepSeek V4.1 Flash**（原生多模态直传）与 **DeepSeek V4 Pro**（视觉代理）。
+* **上下文长度更正**：文档中的 “1M Token” 改为实际值 —— **655,360 输入 / 393,216 输出** Token。
+* **模型名与描述本地化修复**：`resolveModelText()` 原先按 `deepseek-v4-` 前缀截取 i18n 键，而 Flash 的模型 ID 是 `deepseek-flash`，键永远查不到、静默回落到硬编码中文 —— 英文界面下 Flash 的描述与模型名都显示为中文。现改为按**完整模型 ID** 取键，并补上模型名的本地化（英文 `(Fork)` / 中文 `（自研版）`）。
+* **命令名更正**：`src/i18n.ts`、设置项说明与引导文档中 7 处旧命令名（如 `DeepSeek: 设置 API Key`）更正为实际的 `DeepSeek 自研版: …` / `DeepSeek Fork: …`。
+* **移除失效安装路径**：README 一度引导用户从 Open VSX 安装，但本扩展**并未发布到 Open VSX**（接口返回 404）。已移除该指引，改为 Marketplace 与命令行安装。
+* **`modelIdOverrides` 示例更正**：示例键由 `deepseek-v4-flash` 改为实际的 `deepseek-flash`。
+* **撤下过时截图，改为纯文字文档**：README 中的 3 张截图来自上游版本（画面含已移除的 Flash Vision Exp 与旧模型 ID `deepseek-v4-flash`），与当前功能不符。现把两个 README 改为**全文字说明**（同时移除版本／安装量徽章，仅保留纯文字安装链接），并删除这 3 个图片文件。它们此前无任何引用，却仍随包发布。
+* **包体积精简**：`.vscodeignore` 新增排除 `resources/screenshots/**` 与 `resources/icon@512.png`（后者无任何引用）。配图不影响商店页显示 —— vsce 会把相对路径改写为 GitHub 直链，商店从 GitHub 取图，不必打进 `vsix`。包体积由 **606 KB（99 文件）降至 162 KB（95 文件）**，约减少 73%。
+
+### 新增 / Added
+
+* `tools/check-i18n-models.js`：逐个模型 × 逐字段校验 i18n 键能否解析（防“静默回落到硬编码”），并反向检查孤儿键。已接入 `npm test`。
+
 ## 0.0.1 (2026-09-10)
 
 首个自研发布版本 / First release under the `zltianhen` publisher.

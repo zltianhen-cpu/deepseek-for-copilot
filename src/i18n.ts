@@ -19,11 +19,14 @@ type Translations = Record<string, string>;
 
 const zh: Translations = {
 	// Model descriptions
-	'model.flash.detail': '快速高效',
-	'model.pro.detail': '深度推理',
-	'model.flash-vision-exp.detail': '原生视觉实验模型',
-	'model.flash.tooltip': '快速高效的 DeepSeek V4 模型，推理能力接近 V4 Pro，API 定价更经济。',
-	'model.pro.tooltip': 'DeepSeek V4 模型，面向 Agent 编程、广泛世界知识和高阶推理任务。',
+	'model.deepseek-flash.name': 'DeepSeek Flash（Cache-Aware）',
+	'model.deepseek-flash.detail': '快速高效 · 支持图片输入',
+	'model.deepseek-v4-pro.name': 'DeepSeek V4 Pro（Cache-Aware）',
+	'model.deepseek-v4-pro.detail': '深度推理',
+	'model.deepseek-flash.tooltip':
+		'DeepSeek Flash，支持图片输入（能看图、理解图片，不生成图片），推理能力接近 V4 Pro，API 定价更经济。每轮只发送相关技能块，并锁定前缀以稳住缓存命中率。',
+	'model.deepseek-v4-pro.tooltip':
+		'DeepSeek V4 模型，面向 Agent 编程、广泛世界知识和高阶推理任务。每轮只发送相关技能块，并锁定前缀以稳住缓存命中率。',
 	'model.pricing.currentPeak': '高峰时段',
 	'model.pricing.currentOffPeak': '空闲时段',
 	'model.pricing.inputLabel': '输入',
@@ -34,7 +37,6 @@ const zh: Translations = {
 	'model.pricing.transitionTime.today': '{0}',
 	'model.pricing.transitionTime.tomorrow': '明天 {0}',
 	'model.pricing.transitionTime.weekday': '{0} {1}',
-	'model.flash-vision-exp.tooltip': 'DeepSeek V4 Flash 视觉实验模型，支持原生图片与文本输入。',
 
 	// API Key
 	'auth.apiKeyRequiredDetail': '请先配置 API Key',
@@ -43,7 +45,7 @@ const zh: Translations = {
 	'auth.emptyValidation': 'API Key 不能为空',
 	'auth.saved': 'API Key 已安全保存。',
 	'auth.removed': 'API Key 已移除。',
-	'auth.notConfigured': 'API Key 未配置，请在命令面板运行 "DeepSeek: 设置 API Key"。',
+	'auth.notConfigured': 'API Key 未配置，请在命令面板运行 "DeepSeek Cache-Aware: 设置 API Key"。',
 
 	// Thinking Effort — short labels for model picker dropdown
 	'status.thinking': '思考模式',
@@ -64,7 +66,7 @@ const zh: Translations = {
 	'vision.action.configureProxy': '配置视觉代理',
 	'vision.panel.title': 'DeepSeek 视觉代理',
 	'vision.panel.description':
-		'为 Flash 和 Pro 配置一个将图片转换成文字描述的视觉模型。Vision Exp 会直接处理原图。',
+		'为 DeepSeek V4 Pro 配置一个把图片转换成文字描述的视觉模型。Flash 直接接收图片输入、不走视觉代理；两个模型都只能看图，不生成图片。',
 	'vision.panel.source.vscodeLm': 'VS Code 模型',
 	'vision.panel.source.apiEndpoint': 'API 端点',
 	'vision.panel.field.source': '视觉代理来源',
@@ -215,22 +217,24 @@ const zh: Translations = {
 	'error.unknown': 'DeepSeek 请求失败：{0}',
 
 	// Extension
-	'extension.activateFailed': 'DeepSeek 激活失败，请运行 "DeepSeek: 显示日志" 查看详情。',
+	'extension.activateFailed':
+		'DeepSeek 激活失败，请运行 "DeepSeek Cache-Aware: 显示日志" 查看详情。',
 	'extension.deactivateFailed': 'DeepSeek 停用异常',
 	'extension.welcomeFailed': '欢迎引导加载异常',
 	'extension.openRequestDumpsFolderFailed':
-		'打开请求 dump 目录失败，请运行 "DeepSeek: 显示日志" 查看详情。',
+		'打开请求 dump 目录失败，请运行 "DeepSeek Cache-Aware: 显示日志" 查看详情。',
 };
 
 const en: Translations = {
 	// Model descriptions
-	'model.flash.detail': 'Fast, general-purpose model',
-	'model.pro.detail': 'Most capable reasoning model',
-	'model.flash-vision-exp.detail': 'Experimental native vision model',
-	'model.flash.tooltip':
-		'Fast, efficient DeepSeek V4 model with reasoning close to V4 Pro and economical API pricing.',
-	'model.pro.tooltip':
-		'DeepSeek V4 model for agentic coding, broad world knowledge, and high-end reasoning.',
+	'model.deepseek-flash.name': 'DeepSeek Flash (Cache-Aware)',
+	'model.deepseek-flash.detail': 'Fast and efficient · image input',
+	'model.deepseek-v4-pro.name': 'DeepSeek V4 Pro (Cache-Aware)',
+	'model.deepseek-v4-pro.detail': 'Most capable reasoning model',
+	'model.deepseek-flash.tooltip':
+		'DeepSeek Flash with image input (reads images; does not generate them), reasoning close to V4 Pro, and economical API pricing. Sends only relevant skill blocks and keeps the prompt prefix stable to preserve cache hits.',
+	'model.deepseek-v4-pro.tooltip':
+		'DeepSeek V4 model for agentic coding, broad world knowledge, and high-end reasoning. Sends only relevant skill blocks and keeps the prompt prefix stable to preserve cache hits.',
 	'model.pricing.currentPeak': 'Peak',
 	'model.pricing.currentOffPeak': 'Off-peak',
 	'model.pricing.inputLabel': 'Input',
@@ -241,11 +245,9 @@ const en: Translations = {
 	'model.pricing.transitionTime.today': 'at {0}',
 	'model.pricing.transitionTime.tomorrow': 'tomorrow at {0}',
 	'model.pricing.transitionTime.weekday': 'on {0} at {1}',
-	'model.flash-vision-exp.tooltip':
-		'Experimental DeepSeek V4 Flash vision model with native image and text input.',
 
 	// API Key
-	'auth.apiKeyRequiredDetail': 'Please run DeepSeek: Set API Key to configure.',
+	'auth.apiKeyRequiredDetail': 'Please run DeepSeek Cache-Aware: Set API Key to configure.',
 	'auth.prompt':
 		'Enter your DeepSeek API key or compatible provider token. Official DeepSeek keys usually start with "sk-".',
 	'auth.placeholder': 'sk-... or provider token',
@@ -253,7 +255,7 @@ const en: Translations = {
 	'auth.saved': 'DeepSeek API key saved.',
 	'auth.removed': 'DeepSeek API key removed.',
 	'auth.notConfigured':
-		'DeepSeek API key not configured. Run "DeepSeek: Set API Key" from the Command Palette.',
+		'DeepSeek API key not configured. Run "DeepSeek Cache-Aware: Set API Key" from the Command Palette.',
 
 	// Thinking Effort
 	'status.thinking': 'Thinking Effort',
@@ -276,7 +278,7 @@ const en: Translations = {
 	'vision.action.configureProxy': 'Configure Vision Proxy',
 	'vision.panel.title': 'DeepSeek Vision Proxy',
 	'vision.panel.description':
-		'Configure a vision model that turns images into text for Flash and Pro. Vision Exp processes original images directly.',
+		'Configure a vision model that turns images into text for DeepSeek V4 Pro. Flash takes images directly as input and does not use the Vision Proxy. Both models read images only — neither generates images.',
 	'vision.panel.source.vscodeLm': 'VS Code model',
 	'vision.panel.source.apiEndpoint': 'API endpoint',
 	'vision.panel.field.source': 'Vision proxy source',
@@ -453,11 +455,12 @@ const en: Translations = {
 	'error.unknown': 'DeepSeek request failed: {0}',
 
 	// Extension
-	'extension.activateFailed': 'DeepSeek failed to activate. Run "DeepSeek: Show Logs" for details.',
+	'extension.activateFailed':
+		'DeepSeek failed to activate. Run "DeepSeek Cache-Aware: Show Logs" for details.',
 	'extension.deactivateFailed': 'Failed to prepare DeepSeek provider for deactivate',
 	'extension.welcomeFailed': 'Failed to show DeepSeek welcome prompt',
 	'extension.openRequestDumpsFolderFailed':
-		'Failed to open request dumps folder. Run "DeepSeek: Show Logs" for details.',
+		'Failed to open request dumps folder. Run "DeepSeek Cache-Aware: Show Logs" for details.',
 };
 
 /**

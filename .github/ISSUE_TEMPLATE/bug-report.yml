@@ -53,10 +53,9 @@ body:
         If you manually installed or switched Copilot Chat, include its exact version and installation method.
 
         To collect diagnostic logs:
-        1. Open Settings and search for "DeepSeek Copilot: Debug Mode".
-        2. Select "Metadata" and reproduce the problem.
-        3. Run "DeepSeek: Show Logs" from the Command Palette.
-
+          1. Open Settings and search for "deepseek-fork.debugMode".
+          2. Select "Metadata" and reproduce the problem.
+          3. Run "DeepSeek Cache-Aware: Show Logs" from the Command Palette.
         Review the logs before attaching them. Do not share Verbose request dumps publicly.
 
   - type: checkboxes

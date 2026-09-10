@@ -1,5 +1,5 @@
 import vscode from 'vscode';
-import { EXTERNAL_URLS } from '../consts';
+import { CONFIG_SECTION, EXTERNAL_URLS } from '../consts';
 import { t } from '../i18n';
 import { logger } from '../logger';
 import { ensureRequestDumpRoot } from '../provider/debug';
@@ -14,7 +14,7 @@ export function registerCommands(context: vscode.ExtensionContext): void {
 			vscode.env.openExternal(vscode.Uri.parse(EXTERNAL_URLS.deepseek.apiKeys)),
 		),
 		vscode.commands.registerCommand('deepseek-fork.openSettings', () =>
-			vscode.commands.executeCommand('workbench.action.openSettings', 'deepseek-copilot'),
+			vscode.commands.executeCommand('workbench.action.openSettings', CONFIG_SECTION),
 		),
 	);
 }
