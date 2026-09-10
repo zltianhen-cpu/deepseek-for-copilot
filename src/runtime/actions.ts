@@ -24,7 +24,7 @@ const ACTION_URLS: readonly ActionUrlDefinition[] = [
 	{
 		key: 'configureApiKey',
 		path: CONFIGURE_API_KEY_URI_PATH,
-		handle: () => vscode.commands.executeCommand('deepseek-copilot.setApiKey'),
+		handle: () => vscode.commands.executeCommand('deepseek-fork.setApiKey'),
 		resolveFailureMessage: 'Failed to resolve DeepSeek set API key URI',
 	},
 	{
@@ -36,7 +36,7 @@ const ACTION_URLS: readonly ActionUrlDefinition[] = [
 	},
 	{
 		path: SET_VISION_MODEL_URI_PATH,
-		handle: () => vscode.commands.executeCommand('deepseek-copilot.setVisionModel'),
+		handle: () => vscode.commands.executeCommand('deepseek-fork.setVisionModel'),
 		resolveFailureMessage: 'Failed to resolve DeepSeek set vision model URI',
 		setUrl: setVisionProxyConfigurationUrl,
 	},

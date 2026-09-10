@@ -1,6 +1,6 @@
 # Tools 列表不稳定
 
-DeepSeek V4 for Copilot Chat 检测到当前会话中的 Tools（工具）列表在不同轮次之间可能不稳定。
+DeepSeek for Copilot Chat 检测到当前会话中的 Tools（工具）列表在不同轮次之间可能不稳定。
 
 ## 为什么会发生
 
@@ -22,4 +22,4 @@ DeepSeek 对输入前缀使用上下文 KV 缓存（KVCache）。Tools 数组是
 2. 关闭 `deepseek-copilot.experimental.stabilizeToolList`。
 3. 如果你不介意缓存命中率下降，也可以继续在当前会话发送消息。
 
-如果你有更好的解决方案，欢迎在 [issue #56](https://github.com/Vizards/deepseek-v4-for-copilot/issues/56) 讨论。
+如果你有更好的解决方案，欢迎到 [Issues](https://github.com/zltianhen-cpu/deepseek-for-copilot/issues) 讨论。

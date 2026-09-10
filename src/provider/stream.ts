@@ -14,6 +14,7 @@ import {
 } from './replay';
 import type { PreparedChatRequest } from './request';
 import { formatRequestLogLine, type RequestKind } from './routing';
+import { logUsage, REAL_TURN_KIND } from './chat-hooks';
 
 interface ResponseStreamState {
 	accumulatedReasoning: string;
@@ -89,6 +90,24 @@ export function streamChatCompletion({
 						setCharsPerToken(charsPerToken);
 					}
 					prepared.cacheDiagnostics.onUsage(usage, charsPerToken);
+					// 自研版内建钩子：真实用量上报（只读）
+					// 推理 token 只出现在运行时响应里，官方类型未声明 → 安全断言取用
+					const reasoningTokens = (
+						usage as unknown as {
+							completion_tokens_details?: { reasoning_tokens?: number };
+						}
+					).completion_tokens_details?.reasoning_tokens;
+					logUsage({
+						prompt: usage.prompt_tokens,
+						cacheHit: usage.prompt_cache_hit_tokens ?? 0,
+						cacheMiss: usage.prompt_cache_miss_tokens,
+						completion: usage.completion_tokens,
+						reasoning: reasoningTokens,
+						kind: prepared.requestKind,
+						isRealTurn: prepared.requestKind === REAL_TURN_KIND,
+						charsPerToken: getCharsPerToken(),
+						model: prepared.request.model,
+					});
 					reportCopilotContextUsage(progress, usage, prepared.requestKind);
 				},
 			},

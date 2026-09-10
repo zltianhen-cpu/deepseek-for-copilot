@@ -11,8 +11,8 @@ import { formatVisionProxyDisplayMessage } from '../vision/protocols/errors';
 type LanguageModelChatRequestMessagePart =
 	vscode.LanguageModelChatRequestMessage['content'][number];
 
-let visionProxyConfigurationUrl = 'command:deepseek-copilot.setVisionModel';
-let showLogsUrl = 'command:deepseek-copilot.showLogs';
+let visionProxyConfigurationUrl = 'command:deepseek-fork.setVisionModel';
+let showLogsUrl = 'command:deepseek-fork.showLogs';
 
 export function setVisionProxyConfigurationUrl(url: string): void {
 	visionProxyConfigurationUrl = url;

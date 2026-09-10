@@ -1,14 +1,14 @@
 {
-  "name": "deepseek-v4-for-copilot",
-  "displayName": "DeepSeek V4 for Copilot Chat",
+  "name": "deepseek-for-copilot",
+  "displayName": "%displayName%",
   "description": "Use DeepSeek V4 Pro, Flash, and Flash Vision Exp in Copilot Chat with native vision, Vision Proxy, reasoning, and agent tools.",
   "icon": "resources/icon.png",
-  "version": "0.8.2",
-  "publisher": "Vizards",
+  "version": "0.0.1",
+  "publisher": "zltianhen",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Vizards/deepseek-v4-for-copilot"
+    "url": "https://github.com/zltianhen-cpu/deepseek-for-copilot"
   },
   "engines": {
     "vscode": "^1.116.0",
@@ -43,37 +43,37 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "deepseek",
-        "displayName": "DeepSeek"
+        "vendor": "deepseek-fork",
+        "displayName": "DeepSeek 自研版"
       }
     ],
     "commands": [
       {
-        "command": "deepseek-copilot.setApiKey",
+        "command": "deepseek-fork.setApiKey",
         "title": "%deepseek-copilot.command.setApiKey%"
       },
       {
-        "command": "deepseek-copilot.getApiKey",
+        "command": "deepseek-fork.getApiKey",
         "title": "%deepseek-copilot.command.getApiKey%"
       },
       {
-        "command": "deepseek-copilot.clearApiKey",
+        "command": "deepseek-fork.clearApiKey",
         "title": "%deepseek-copilot.command.clearApiKey%"
       },
       {
-        "command": "deepseek-copilot.setVisionModel",
+        "command": "deepseek-fork.setVisionModel",
         "title": "%deepseek-copilot.command.setVisionModel%"
       },
       {
-        "command": "deepseek-copilot.openSettings",
+        "command": "deepseek-fork.openSettings",
         "title": "%deepseek-copilot.command.openSettings%"
       },
       {
-        "command": "deepseek-copilot.showLogs",
+        "command": "deepseek-fork.showLogs",
         "title": "%deepseek-copilot.command.showLogs%"
       },
       {
-        "command": "deepseek-copilot.openRequestDumpsFolder",
+        "command": "deepseek-fork.openRequestDumpsFolder",
         "title": "%deepseek-copilot.command.openRequestDumpsFolder%"
       }
     ],
@@ -91,7 +91,7 @@
               "markdown": "resources/walkthrough/set-api-key.md"
             },
             "completionEvents": [
-              "onCommand:deepseek-copilot.setApiKey"
+              "onCommand:deepseek-fork.setApiKey"
             ]
           },
           {
@@ -138,24 +138,19 @@
         "deepseek-copilot.modelIdOverrides": {
           "type": "object",
           "default": {
-            "deepseek-v4-flash": "deepseek-v4-flash",
             "deepseek-v4-pro": "deepseek-v4-pro",
-            "deepseek-v4-flash-vision-exp": "deepseek-v4-flash-vision-exp"
+            "deepseek-flash": "deepseek-flash"
           },
           "description": "%deepseek-copilot.config.modelIdOverrides.description%",
           "additionalProperties": false,
           "properties": {
-            "deepseek-v4-flash": {
-              "type": "string",
-              "description": "%deepseek-copilot.config.modelIdOverrides.deepseek-v4-flash.description%"
-            },
             "deepseek-v4-pro": {
               "type": "string",
               "description": "%deepseek-copilot.config.modelIdOverrides.deepseek-v4-pro.description%"
             },
-            "deepseek-v4-flash-vision-exp": {
+            "deepseek-flash": {
               "type": "string",
-              "description": "%deepseek-copilot.config.modelIdOverrides.deepseek-v4-flash-vision-exp.description%"
+              "description": "%deepseek-copilot.config.modelIdOverrides.deepseek-flash.description%"
             }
           }
         },
@@ -204,8 +199,10 @@
     "lint": "oxlint",
     "format": "oxfmt --write src/",
     "format:check": "oxfmt --check src/",
+    "test": "for f in test/smoke-*.js; do node \"$f\" || exit 1; done",
+    "check:publish": "node tools/check-publish.mjs",
     "package": "vsce package --readme-path dist/README.marketplace.md -o dist/",
-    "login": "vsce login Vizards"
+    "login": "vsce login zltianhen"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

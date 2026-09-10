@@ -177,10 +177,13 @@ const zh: Translations = {
 	'notice.visionProxyMissing': '⚠️ 视觉代理不可用，DeepSeek 无法看到图片。[配置视觉代理]({0})',
 	'notice.visionProxyFailure': '**⚠️ {0}**\\\n\\\n**{1} · {2}**',
 	'notice.toolDrift':
-		'⚠️ 工具列表不稳定，缓存命中率可能下降。[了解更多](https://github.com/Vizards/deepseek-v4-for-copilot/blob/main/docs/notices/tool-drift.zh.md)',
+		'⚠️ 工具列表不稳定，缓存命中率可能下降。[了解更多](https://github.com/zltianhen-cpu/deepseek-for-copilot/blob/main/docs/notices/tool-drift.zh.md)',
 
 	// Errors
 	'error.http.400': '[{0}] 请求体格式错误。请根据错误信息提示修改请求体。',
+	'error.http.serverReason': '[{0}] {1}\n\n{2}',
+	'error.http.hint.contentRisk':
+		'内容未通过上游审核（常见原因：上下文过长或含敏感内容）。建议新开会话，或减少引用的文件后重试。',
 	'error.http.401':
 		'[{0}] API Key 错误，认证失败。请检查您的 API Key 是否正确。如没有 API key，请先创建 API Key。',
 	'error.http.401.withCreateApiKeyLink':
@@ -401,11 +404,14 @@ const en: Translations = {
 		'⚠️ Vision Proxy is unavailable. DeepSeek cannot see images. [Configure Vision Proxy]({0})',
 	'notice.visionProxyFailure': '**⚠️ {0}**\\\n\\\n**{1} · {2}**',
 	'notice.toolDrift':
-		'⚠️ Tool list is unstable; cache hit rate may drop. [Learn more](https://github.com/Vizards/deepseek-v4-for-copilot/blob/main/docs/notices/tool-drift.en.md)',
+		'⚠️ Tool list is unstable; cache hit rate may drop. [Learn more](https://github.com/zltianhen-cpu/deepseek-for-copilot/blob/main/docs/notices/tool-drift.en.md)',
 
 	// Errors
 	'error.http.400':
 		'[{0}] Invalid request body format. Please modify your request body according to the hints in the error message.',
+	'error.http.serverReason': '[{0}] {1}\n\n{2}',
+	'error.http.hint.contentRisk':
+		'Content was rejected by upstream moderation (often caused by an over-long context or sensitive content). Try a new chat session, or reference fewer files.',
 	'error.http.401':
 		"[{0}] Authentication fails due to the wrong API key. Please check your API key. If you don't have one, please create an API key first.",
 	'error.http.401.withCreateApiKeyLink':

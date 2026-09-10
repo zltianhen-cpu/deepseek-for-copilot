@@ -1,8 +1,16 @@
 name: Release
 
+# ⛔ 已改为「仅手动触发」（ 2026-09-10 ）。
+#
+# 原先 push 到 main 会自动发版：release-please 按 commit 信息自动决定版本号
+# （fix → 0.0.2、feat → 0.1.0），合并 Release PR 后直接 vsce publish 到商店。
+# 这与「版本号由人工控制」的意图冲突，且会绕过上架前的人工检查。
+#
+# 想恢复自动发版，把下面的 workflow_dispatch 换回：
+#   push:
+#     branches: [main]
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}

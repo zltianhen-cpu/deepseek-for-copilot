@@ -1,17 +1,17 @@
-<h1 align="center">DeepSeek V4 for Copilot Chat</h1>
+<h1 align="center">DeepSeek for Copilot Chat（自研版）</h1>
 
 <p align="center">
   <!-- marketplace-readme:remove-start -->
-  <a href="https://marketplace.visualstudio.com/items?itemName=Vizards.deepseek-v4-for-copilot"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-Install-007ACC?logo=visualstudiocode&logoColor=white&style=for-the-badge" alt="从 VS Code Marketplace 安装"></a>
-  <a href="https://open-vsx.org/extension/Vizards/deepseek-v4-for-copilot"><img src="https://img.shields.io/badge/Open%20VSX-Install-6A4FB6?style=for-the-badge" alt="从 Open VSX 安装"></a>
+  <a href="https://marketplace.visualstudio.com/items?itemName=zltianhen.deepseek-for-copilot"><img src="https://img.shields.io/badge/VS%20Code%20Marketplace-Install-007ACC?logo=visualstudiocode&logoColor=white&style=for-the-badge" alt="从 VS Code Marketplace 安装"></a>
+  <a href="https://open-vsx.org/extension/zltianhen/deepseek-for-copilot"><img src="https://img.shields.io/badge/Open%20VSX-Install-6A4FB6?style=for-the-badge" alt="从 Open VSX 安装"></a>
   <br/>
   <!-- marketplace-readme:remove-end -->
-  <img src="https://img.shields.io/github/v/release/Vizards/deepseek-v4-for-copilot?style=for-the-badge&label=Version" alt="版本" />
-  <img src="https://vsmarketplacebadges.dev/installs-short/Vizards.deepseek-v4-for-copilot.svg?style=for-the-badge" alt="安装量" />
+  <img src="https://vsmarketplacebadges.dev/version-short/zltianhen.deepseek-for-copilot.svg?style=for-the-badge" alt="版本" />
+  <img src="https://vsmarketplacebadges.dev/installs-short/zltianhen.deepseek-for-copilot.svg?style=for-the-badge" alt="安装量" />
 </p>
 
 <p align="center">
-  <a href="https://github.com/Vizards/deepseek-v4-for-copilot/blob/main/README.md">English</a> |
+  <a href="https://github.com/zltianhen-cpu/deepseek-for-copilot/blob/main/README.md">English</a> |
   简体中文
 </p>
 
@@ -71,7 +71,7 @@ API Key 存储在 VS Code 的 `SecretStorage` 中（macOS 钥匙串 / Windows �
 
 ### 前置条件
 
-- VS Code 1.116 及以上版本。本扩展依赖非公开的 Copilot Chat API，较新的 VS Code 版本可能存在兼容性问题——如遇到请[提交 Issue](https://github.com/Vizards/deepseek-v4-for-copilot/issues)。
+- VS Code 1.116 及以上版本。本扩展依赖非公开的 Copilot Chat API，较新的 VS Code 版本可能存在兼容性问题——如遇到请[提交 Issue](https://github.com/zltianhen-cpu/deepseek-for-copilot/issues)。
 - GitHub Copilot 订阅（Free / Pro / Enterprise——免费版即可使用）
 - DeepSeek API Key，从 [platform.deepseek.com](https://platform.deepseek.com) 获取；使用自定义 `deepseek-copilot.baseUrl` 时也可使用兼容的 provider token
 
@@ -79,8 +79,8 @@ API Key 存储在 VS Code 的 `SecretStorage` 中（macOS 钥匙串 / Windows �
 
 根据你所使用的编辑器选择对应的注册表安装：
 
-1. **Microsoft VS Code** — 从 [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Vizards.deepseek-v4-for-copilot) 安装。
-2. **使用 Open VSX 的编辑器** — 从 [Open VSX](https://open-vsx.org/extension/Vizards/deepseek-v4-for-copilot) 安装。
+1. **Microsoft VS Code** — 从 [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=zltianhen.deepseek-for-copilot) 安装。
+2. **使用 Open VSX 的编辑器** — 从 [Open VSX](https://open-vsx.org/extension/zltianhen/deepseek-for-copilot) 安装。
 
 ### 使用步骤
 

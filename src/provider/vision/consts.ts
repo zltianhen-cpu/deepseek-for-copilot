@@ -9,7 +9,7 @@
 export const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /** Default model ID used for the vision proxy when auto-detection is enabled. */
-export const DEFAULT_VISION_MODEL_ID = 'deepseek-v4-flash-vision-exp';
+export const DEFAULT_VISION_MODEL_ID = 'deepseek-flash';
 
 /**
  * Prompt sent to the vision proxy model when describing image attachments

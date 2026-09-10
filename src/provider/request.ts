@@ -16,6 +16,7 @@ import { getConfiguredThinkingEffort, type ModelConfigurationOptions } from './m
 import type { ReplayMarkerMetadata } from './replay';
 import { classifyDeepSeekRequest, shouldForceThinkingNone, type RequestKind } from './routing';
 import type { ConversationSegment } from './segment';
+import { applyMessageFilter, logMessageComposition } from './chat-hooks';
 import { collectTrailingToolResultIds, prepareRequestTools } from './tools/request';
 import {
 	finalizeVisionResolutionStats,
@@ -83,6 +84,9 @@ export async function prepareChatRequest({
 	const resolvedMessages = visionResolution.messages;
 
 	const deepseekMessages = convertMessages(resolvedMessages, isThinkingModel, nativeImageInput);
+	// 自研版内建钩子（顺序不可颠倒：第二个要看到第一个处理后的结果）
+	applyMessageFilter(deepseekMessages);
+	logMessageComposition(deepseekMessages);
 	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 	const tools = prepareRequestTools(modelDef?.capabilities.toolCalling, options);
 

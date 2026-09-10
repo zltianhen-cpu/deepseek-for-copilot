@@ -12,7 +12,10 @@ import { getVSCodeVisionTargetChatSessionType } from './model';
 const EXCLUDED_VISION_MODEL_IDS = new Set([
 	'copilot-utility',
 	'copilot-utility-small',
-	'deepseek-v4-flash',
+	// 这里只能排除「不能／不该当代理」的模型。
+	// ⛔ 绝不能把 DEFAULT_VISION_MODEL_ID（deepseek-flash）放进来：
+	//    它与 isDeepSeekVisionExpModel() 的允许判定是「与」关系，
+	//    一旦排除，代理就找不到任何 deepseek 模型 → V4 Pro 看图直接坏掉。
 	'deepseek-v4-pro',
 ]);
 const EXCLUDED_VISION_MODEL_VENDORS = new Set(['claude-code', 'copilotcli']);

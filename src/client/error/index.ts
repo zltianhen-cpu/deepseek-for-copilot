@@ -69,6 +69,7 @@ export async function createHttpError(
 	const userSummary = getHttpErrorMessage(
 		response.status,
 		getCreateApiKeyUrl(response.status, baseUrl),
+		serverMessage,
 	);
 
 	return new DeepSeekRequestError({
@@ -158,7 +159,44 @@ export function createUserFacingError(error: Error): Error {
 	return displayError;
 }
 
-function getHttpErrorMessage(status: number, createApiKeyUrl?: string): string {
+/**
+ * 组装用户可见的错误摘要。
+ *
+ * ⚠️ 2026-09-10 修复：上游有具体原因时**必须透传**。
+ * 实测坑：上游返回 `Content Exists Risk`（内容风险），旧实现只按状态码取本地
+ * 通用文案「请求体格式错误」→ 用户被误导去改请求体（改了没用 —— 请求体没错）。
+ * 状态码只说明「哪一类」，上游 message 才说明「为什么」。
+ */
+function getHttpErrorMessage(
+	status: number,
+	createApiKeyUrl?: string,
+	serverMessage?: string,
+): string {
+	const localMessage = getLocalHttpErrorMessage(status, createApiKeyUrl);
+	if (!serverMessage) {
+		return localMessage;
+	}
+	return t(
+		'error.http.serverReason',
+		status,
+		serverMessage,
+		getServerMessageHint(serverMessage) ?? localMessage,
+	);
+}
+
+/**
+ * 已知上游原因 → 可操作建议。
+ * 未命中的原因仍然透传原文（保真优先），只是不带额外建议。
+ */
+function getServerMessageHint(serverMessage: string): string | undefined {
+	const normalized = serverMessage.trim().toLowerCase();
+	if (normalized.includes('content exists risk')) {
+		return t('error.http.hint.contentRisk');
+	}
+	return undefined;
+}
+
+function getLocalHttpErrorMessage(status: number, createApiKeyUrl?: string): string {
 	switch (status) {
 		case 400:
 			return t('error.http.400', status);

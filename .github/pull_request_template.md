@@ -4,7 +4,7 @@ Pull requests that fall outside the project scope or are not ready for review ma
 
 Provider presets, fixed endpoints, branded links, and Marketplace exposure may be closed if submitted without prior discussion.
 For matters better handled privately, see Contact the Maintainer:
-https://github.com/Vizards/deepseek-v4-for-copilot/blob/main/.github/CONTACT.md
+https://github.com/zltianhen-cpu/deepseek-for-copilot/blob/main/.github/CONTACT.md
 -->
 
 ## Related issues

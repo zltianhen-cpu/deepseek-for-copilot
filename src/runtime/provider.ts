@@ -8,12 +8,12 @@ export async function registerProvider(
 	const provider = new DeepSeekChatProvider(context);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('deepseek-copilot.setApiKey', () => provider.configureApiKey()),
-		vscode.commands.registerCommand('deepseek-copilot.clearApiKey', () => provider.clearApiKey()),
-		vscode.commands.registerCommand('deepseek-copilot.setVisionModel', () =>
+		vscode.commands.registerCommand('deepseek-fork.setApiKey', () => provider.configureApiKey()),
+		vscode.commands.registerCommand('deepseek-fork.clearApiKey', () => provider.clearApiKey()),
+		vscode.commands.registerCommand('deepseek-fork.setVisionModel', () =>
 			provider.setVisionModel(),
 		),
-		vscode.lm.registerLanguageModelChatProvider('deepseek', provider),
+		vscode.lm.registerLanguageModelChatProvider('deepseek-fork', provider),
 	);
 
 	// Copilot Chat can serve cached model info without configurationSchema.

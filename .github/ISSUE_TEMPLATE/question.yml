@@ -7,7 +7,7 @@ body:
       value: |
         Questions are intended primarily for community discussion and peer support.<br>此分类主要用于社区互助交流。
 
-        If you have confirmed unexpected extension behavior, use the [Bug Report](https://github.com/Vizards/deepseek-v4-for-copilot/issues/new?template=bug-report.yml) form and provide reproducible information.<br>如果确认是扩展异常，请使用 [Bug Report / Bug 报告](https://github.com/Vizards/deepseek-v4-for-copilot/issues/new?template=bug-report.yml) 并提供可复现信息。
+        If you have confirmed unexpected extension behavior, use the [Bug Report](https://github.com/zltianhen-cpu/deepseek-for-copilot/issues/new?template=bug-report.yml) form and provide reproducible information.<br>如果确认是扩展异常，请使用 [Bug Report / Bug 报告](https://github.com/zltianhen-cpu/deepseek-for-copilot/issues/new?template=bug-report.yml) 并提供可复现信息。
 
   - type: textarea
     id: question
