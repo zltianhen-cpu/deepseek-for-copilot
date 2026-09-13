@@ -1,0 +1,1 @@
+{"model":"deepseek-chat","messages":[{"role":"system","content":"SYS-STABLE"},{"role":"user","content":"第一问"},{"role":"assistant","content":"第一答"}],"stream":true,"temperature":0.2,"max_tokens":128,"thinking":{"type":"disabled"}}

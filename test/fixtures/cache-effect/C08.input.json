@@ -1,0 +1,1 @@
+{"model":"deepseek-chat","messages":[{"role":"system","content":"中文\n换行"},{"role":"user","content":"你好🎉\"引号\"\\反斜杠"},{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"read_file","arguments":"{\"p\":\"a\\nb\"}"}}]}],"stream":true}

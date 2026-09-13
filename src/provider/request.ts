@@ -1,4 +1,5 @@
 import vscode from 'vscode';
+import { newRequestId, recordRequestEvent } from './request-events';
 import { AuthManager } from '../auth';
 import { DeepSeekClient } from '../client';
 import { getApiModelId, getBaseUrl, getMaxTokens } from '../config';
@@ -6,7 +7,7 @@ import { MODELS } from '../consts';
 import { isOfficialDeepSeekBaseUrl } from '../endpoint';
 import { t } from '../i18n';
 import type { DeepSeekRequest } from '../types';
-import { convertMessages, countMessageChars } from './convert';
+import { buildSourceSidecar, convertMessages, countMessageChars } from './convert';
 import {
 	dumpDeepSeekRequest,
 	type CacheDiagnosticsRecorder,
@@ -17,6 +18,7 @@ import type { ReplayMarkerMetadata } from './replay';
 import { classifyDeepSeekRequest, shouldForceThinkingNone, type RequestKind } from './routing';
 import type { ConversationSegment } from './segment';
 import { applyMessageFilter, logMessageComposition } from './chat-hooks';
+import { makeFoldSummarize } from './fold-summarize';
 import { collectTrailingToolResultIds, prepareRequestTools } from './tools/request';
 import {
 	finalizeVisionResolutionStats,
@@ -25,6 +27,7 @@ import {
 } from './vision';
 
 export interface PreparedChatRequest {
+	requestId: string;
 	client: DeepSeekClient;
 	request: DeepSeekRequest;
 	isThinkingModel: boolean;
@@ -62,6 +65,8 @@ export async function prepareChatRequest({
 	cacheDiagnostics,
 	getVisionDescriber,
 }: PrepareChatRequestOptions): Promise<PreparedChatRequest> {
+	const requestId = newRequestId();
+	recordRequestEvent(requestId, 'PREPARE', 'main-agent');
 	const apiKey = await authManager.getApiKey();
 	if (!apiKey) {
 		throw new Error(t('auth.notConfigured'));
@@ -83,13 +88,23 @@ export async function prepareChatRequest({
 
 	const resolvedMessages = visionResolution.messages;
 
+	const sourceSidecar = buildSourceSidecar(resolvedMessages);
 	const deepseekMessages = convertMessages(resolvedMessages, isThinkingModel, nativeImageInput);
 	// 工具 schema 排在 messages 之前，同属 provider 前缀：schema 一变缓存全断，
 	// 而 system 提示可能一个字没动。故在钩子之前先备好 tools 并交给探针做指纹。
 	// （prepareRequestTools 只依赖 modelDef/options，上移无副作用）
 	const tools = prepareRequestTools(modelDef?.capabilities.toolCalling, options);
 	// 本扩展内建钩子（顺序不可颠倒：第二个要看到第一个处理后的结果）
-	applyMessageFilter(deepseekMessages);
+	// 折叠落盘钥匙在 chat-hooks 里拼：工作区|segmentId|模型。sid 不进钥匙。
+	const apiModel = getApiModelId(modelInfo.id);
+	await applyMessageFilter(deepseekMessages, {
+		requestId,
+		segment,
+		model: apiModel,
+		tools,
+		summarize: makeFoldSummarize(client, apiModel, token, tools, requestId),
+		sourceSidecar,
+	});
 	logMessageComposition(deepseekMessages, tools);
 	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 
@@ -162,6 +177,7 @@ export async function prepareChatRequest({
 	});
 
 	return {
+		requestId,
 		client,
 		request,
 		isThinkingModel,

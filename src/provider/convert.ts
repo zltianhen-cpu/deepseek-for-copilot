@@ -182,6 +182,55 @@ function mapRole(role: vscode.LanguageModelChatMessageRole): 'user' | 'assistant
 	}
 }
 
+function vscodeRoleName(role: vscode.LanguageModelChatMessageRole): 'user' | 'assistant' | 'system' {
+	if (role === vscode.LanguageModelChatMessageRole.User) return 'user';
+	if (role === vscode.LanguageModelChatMessageRole.Assistant) return 'assistant';
+	return 'system';
+}
+
+export interface SourceSidecarEntry {
+	index: number;
+	vscodeRole: 'user' | 'assistant' | 'system';
+	mappedRole: 'user' | 'assistant';
+	parts: Array<{ kind: 'text' | 'image' | 'tool' | 'unknown'; chars: number }>;
+	hostProven: false;
+}
+
+export interface SourceSidecar {
+	schemaVersion: 1;
+	entries: SourceSidecarEntry[];
+}
+
+/** convert 前角色/part 范围。hostProven 永不从标签推断。 */
+export function buildSourceSidecar(
+	messages: readonly vscode.LanguageModelChatRequestMessage[],
+): SourceSidecar {
+	return {
+		schemaVersion: 1,
+		entries: messages.map((message, index) => {
+			const parts: SourceSidecarEntry['parts'] = [];
+			for (const part of message.content) {
+				if (part instanceof vscode.LanguageModelTextPart) {
+					parts.push({ kind: 'text', chars: String(part.value || '').length });
+				} else if (isImageDataPart(part)) {
+					parts.push({ kind: 'image', chars: 0 });
+				} else if (part instanceof vscode.LanguageModelToolCallPart || part instanceof vscode.LanguageModelToolResultPart) {
+					parts.push({ kind: 'tool', chars: 0 });
+				} else {
+					parts.push({ kind: 'unknown', chars: 0 });
+				}
+			}
+			return {
+				index,
+				vscodeRole: vscodeRoleName(message.role),
+				mappedRole: mapRole(message.role),
+				parts,
+				hostProven: false,
+			};
+		}),
+	};
+}
+
 /**
  * Convert VS Code tool definitions to DeepSeek format.
  */

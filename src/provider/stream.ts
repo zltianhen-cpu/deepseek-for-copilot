@@ -1,3 +1,4 @@
+import { recordRequestEvent } from './request-events';
 import vscode from 'vscode';
 import { createUserFacingError } from '../client';
 import { logger } from '../logger';
@@ -48,6 +49,8 @@ export function streamChatCompletion({
 		initialResponseNoticeReported: false,
 		replayMarkerReported: false,
 	};
+	let usageObserved = false;
+	recordRequestEvent(prepared.requestId, 'SEND_ATTEMPT', prepared.requestKind);
 	const cancelListener = observeCancellationToken(token, prepared.cacheDiagnostics);
 
 	return prepared.client
@@ -83,6 +86,19 @@ export function streamChatCompletion({
 				},
 
 				onUsage: (usage) => {
+					usageObserved = true;
+					recordRequestEvent(
+						prepared.requestId,
+						'USAGE_OBSERVED',
+						prepared.requestKind,
+						undefined,
+						{
+							input: usage.prompt_tokens,
+							output: usage.completion_tokens,
+							hit: usage.prompt_cache_hit_tokens,
+							miss: usage.prompt_cache_miss_tokens,
+						},
+					);
 					const charsPerToken = prepared.hasNativeImages
 						? getCharsPerToken()
 						: updateCharsPerToken(prepared.totalRequestChars, usage, getCharsPerToken());
@@ -114,6 +130,7 @@ export function streamChatCompletion({
 			token,
 		)
 		.then(undefined, (error) => {
+			recordRequestEvent(prepared.requestId, 'REQUEST_SEND_FAILED', prepared.requestKind);
 			reportSkippedReplayMarkerIfNeeded(
 				prepared,
 				state,
@@ -128,6 +145,8 @@ export function streamChatCompletion({
 			}
 		})
 		.finally(() => {
+			if (!usageObserved)
+				recordRequestEvent(prepared.requestId, 'USAGE_UNAVAILABLE', prepared.requestKind);
 			cancelListener.dispose();
 		});
 }

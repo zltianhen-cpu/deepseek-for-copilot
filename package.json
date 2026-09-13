@@ -3,7 +3,7 @@
 	"displayName": "%displayName%",
 	"description": "Use DeepSeek Flash and V4 Pro in Copilot Chat with image input (reads images, never generates them), Vision Proxy, reasoning, and agent tools.",
 	"icon": "resources/icon.png",
-	"version": "0.0.4",
+	"version": "0.0.11",
 	"publisher": "zltianhen",
 	"license": "MIT",
 	"repository": {
@@ -75,6 +75,10 @@
 			{
 				"command": "deepseek-fork.openRequestDumpsFolder",
 				"title": "%deepseek-fork.command.openRequestDumpsFolder%"
+			},
+			{
+				"command": "deepseek-fork.showErrorSummary",
+				"title": "DeepSeek: 查看本地错误摘要"
 			}
 		],
 		"walkthroughs": [
@@ -129,7 +133,7 @@
 				},
 				"deepseek-fork.experimental.stabilizeToolList": {
 					"type": "boolean",
-					"default": false,
+					"default": true,
 					"markdownDescription": "%deepseek-fork.config.experimental.stabilizeToolList.description%",
 					"tags": [
 						"experimental"

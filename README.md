@@ -21,6 +21,7 @@ Love DeepSeek's price-performance but don't want to give up GitHub Copilot's age
 - **Agent mode, tool calling, instructions, MCP, skills — all of it still works.** Copilot's entire stack, now running on DeepSeek.
 - **Two ways to read images — neither one generates images.** Flash takes image attachments directly as input. Pro keeps its existing text context while a configurable Vision Proxy turns images into descriptions. Both models only read images (describe them, read text out of screenshots, analyze charts); neither can generate images.
 - **BYOK, pay DeepSeek directly.** Your API key, your bill, your rate limits. Stored in the OS keychain, never on disk.
+- **Cache-aware by design — our goal is a 99.5%+ prompt-cache hit rate.** DeepSeek bills cache-hit input tokens at a fraction of the standard price; this extension keeps your request prefix stable across turns so the cache keeps hitting.
 
 ## Features
 
@@ -43,7 +44,7 @@ Because this plugs into Copilot's native provider API, you get the full stack fo
 - **Agent mode** — autonomous multi-step tasks
 - **Tool calling** — file edits, terminal, workspace search, Git, tests
 - **Instructions & skills** — all your `.instructions.md`, `AGENTS.md`, and skills just work
-- **Prompt caching stats** — DeepSeek's cache hit rate logged in the output channel so you can see the savings
+- **Prompt caching stats** — the live cache hit rate (goal: 99.5%+) is logged in the output channel, so you can see the savings
 
 ### Secure by Default
 API key lives in VS Code's `SecretStorage` (OS keychain on macOS / Windows / Linux). Never in `settings.json`, never in your Git history.

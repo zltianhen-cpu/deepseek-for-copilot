@@ -183,6 +183,56 @@ export class DeepSeekClient {
 			cancelListener?.dispose();
 		}
 	}
+
+	/**
+	 * 非流式补全。给折叠写简历用。超时/取消/失败抛错，由调用方吞成「不折」。
+	 */
+	async completeChat(
+		request: DeepSeekRequest,
+		timeoutMs: number,
+		cancellationToken?: CancellationToken,
+	): Promise<string> {
+		const controller = new AbortController();
+		const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs || 1));
+		const cancelListener = cancellationToken?.onCancellationRequested(() => {
+			controller.abort();
+		});
+		if (cancellationToken?.isCancellationRequested) {
+			controller.abort();
+		}
+		try {
+			const response = await fetch(`${this.baseUrl}/chat/completions`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+				body: safeStringify({ ...request, stream: false }),
+				signal: controller.signal,
+			});
+			if (!response.ok) {
+				throw await createHttpError(response, { baseUrl: this.baseUrl, request });
+			}
+			const data = (await response.json()) as {
+				choices?: Array<{ finish_reason?: string; message?: { content?: unknown } }>;
+			};
+			const choice = data?.choices?.[0];
+			// 半截摘要不能替代完整历史；未明确完整结束也拒绝提交。
+			if (choice?.finish_reason !== 'stop') {
+				throw Object.assign(new Error('Summary incomplete'), {
+					code: choice?.finish_reason === 'length' ? 'truncated' : 'invalid-finish',
+				});
+			}
+			const content = choice.message?.content;
+			if (typeof content !== 'string' || !content.trim()) {
+				throw Object.assign(new Error('Summary empty'), { code: 'empty' });
+			}
+			return content;
+		} finally {
+			clearTimeout(timer);
+			cancelListener?.dispose();
+		}
+	}
 }
 
 function reportFinalUsage(callbacks: StreamCallbacks, usage: DeepSeekUsage | undefined): void {
