@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.0.17 (2026-09-17)
+
+- Restore per-conversation cache state after a window reload: the retained skill set and the recovered request directory are now persisted and read back, so reloading a window no longer rebuilds them from scratch (fewer full-price re-reads on long conversations).
+- Make prompt folding more reliable: folded turns are recognised before any stored state is discarded, folded states can be inherited when a session is forked or restored, and the fold trigger is measured per character weight so long non-English conversations fold at the intended size instead of running unfolded.
+- Raise the fold waterline so long sessions rewrite history less often while keeping a larger recent tail intact; the on-disk projection store is compacted and migrates automatically on first load.
+- Harden the request pipeline against oversized inputs: unusually large prompt-derived text is no longer taken as the user question, name matching is bounded, and an implausible selection falls back to a safe baseline.
+- Validate the per-conversation retained set on load and cap its size, so an oversized record is discarded and re-selected instead of sticking for the rest of the conversation.
+- Add prefix and composition fingerprints to the local statistics log so cache behaviour can be audited locally without changing what is sent.
+
+## 0.0.16 (2026-09-15)
+
+- Hold the fold waterline higher so long sessions rewrite history less often: folding now triggers near ~250K actual tokens instead of ~100K, and keeps a larger recent-history tail intact for steadier prompt-cache reuse.
+- Compact the fold store: per-message keys become fixed-length fingerprints, with read caching and size caps — shrinking the on-disk projections file from tens of MB to well under 1 MB per machine. Existing records migrate automatically on first load.
+- Rotate the local statistics log: it now rolls over at 32MB and keeps the three most recent files, so long-running installs no longer accumulate an unbounded log file.
+
+## 0.0.15 (2026-09-14)
+
+- Keep the cached prefix state alive across compaction: rounds that replay pre-compaction history no longer discard the stored state, eliminating full cold reads on long-session fold turns.
+
+## 0.0.14 (2026-09-14)
+
+- Fold long conversations earlier: lowered the history-fold waterline so long sessions compact sooner, keeping the outgoing request prefix smaller and steadier for prompt-cache reuse.
+- Debounce repeated state resets within one conversation: reset conditions firing in rapid succession (within 60 seconds) no longer discard the cached prefix state, avoiding redundant rebuilds in bursty sessions.
+
+## 0.0.13 (2026-09-13)
+
+- Persist per-conversation cache state across window reloads: after a reload the client restores the last stable prefix snapshot instead of rebuilding it from scratch, reducing cold-start churn on long sessions.
+- Normalize persisted state keys to fixed-length identifiers so on-disk records stay portable regardless of how a conversation key is shaped.
+
+## 0.0.12 (2026-09-13)
+
+- Stabilize per-session state keys: the key no longer drifts when the conversation's first message grows, so long sessions keep reusing their folded state instead of dropping and re-folding it.
+- Isolate parallel conversations in the same window: state keys now include a stable conversation fingerprint, so separate conversations no longer overwrite each other's cached state.
+- Carry conversation identity across turns: the replay-marker channel is now exercised on every response, letting history restoration and long-session folding resolve to the correct conversation.
+
 ## 0.0.11
 
 - Recover skill selection from validated request catalogs when the local index is missing or mismatched, preserving attachments and prior catalog bytes.

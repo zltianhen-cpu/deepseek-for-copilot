@@ -38,4 +38,6 @@ export interface ReplayMarkerMetadata {
 	visionText?: string;
 	toolVision?: readonly ToolVisionReplayEntry[];
 	reasoningText?: string;
+	/** 对话身份（2026-09-13）：随 marker 回读的稳定 segmentId；无 vision/reasoning 数据轮也上报以激活标识。 */
+	segmentId?: string;
 }

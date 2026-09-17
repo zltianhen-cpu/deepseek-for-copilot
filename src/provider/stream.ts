@@ -202,7 +202,9 @@ function reportReplayMarker(
 	trigger: ReplayMarkerReportTrigger,
 ): void {
 	const metadata = getReplayMarkerMetadata(prepared, state);
-	if (!hasReplayMarkerMetadata(metadata)) {
+	// 2026-09-13：即使没有 vision/reasoning 数据，也带 segmentId 上报最小 marker——
+	// 让 stateful_marker 回读通道激活（对话身份闭环，折叠/柜子钥匙随之稳定）。
+	if (!hasReplayMarkerMetadata(metadata) && !metadata.segmentId) {
 		prepared.cacheDiagnostics.onReplayMarkerReport({
 			status: 'skipped',
 			trigger,

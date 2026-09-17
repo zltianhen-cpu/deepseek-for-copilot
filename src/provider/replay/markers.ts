@@ -57,6 +57,7 @@ export function createReplayMarkerPart(
 		...createVisionMarkerPayload(metadata.visionText),
 		...(metadata.toolVision?.length ? { toolVision: { results: metadata.toolVision } } : {}),
 		...createReasoningMarkerPayload(metadata.reasoningText),
+		...(metadata.segmentId ? { segmentId: metadata.segmentId } : {}),
 	});
 	return new vscode.LanguageModelDataPart(
 		new TextEncoder().encode(`${REPLAY_MARKER_WRITER_ID}\\${payload}`),
