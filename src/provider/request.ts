@@ -187,7 +187,10 @@ export async function prepareChatRequest({
 		cacheDiagnostics: diagnosticsRun,
 		requestKind,
 		segment,
-		replayMarkerMetadata: { ...visionResolution.replayMarkerMetadata, segmentId: segment.segmentId },
+		replayMarkerMetadata: {
+			...visionResolution.replayMarkerMetadata,
+			segmentId: segment.segmentId,
+		},
 		visionMarkerTextChars: visionResolution.stats.markerVisionTextChars || undefined,
 		initialResponseNotice: visionResolution.initialResponseNotice,
 	};

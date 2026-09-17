@@ -182,7 +182,9 @@ function mapRole(role: vscode.LanguageModelChatMessageRole): 'user' | 'assistant
 	}
 }
 
-function vscodeRoleName(role: vscode.LanguageModelChatMessageRole): 'user' | 'assistant' | 'system' {
+function vscodeRoleName(
+	role: vscode.LanguageModelChatMessageRole,
+): 'user' | 'assistant' | 'system' {
 	if (role === vscode.LanguageModelChatMessageRole.User) return 'user';
 	if (role === vscode.LanguageModelChatMessageRole.Assistant) return 'assistant';
 	return 'system';
@@ -214,7 +216,10 @@ export function buildSourceSidecar(
 					parts.push({ kind: 'text', chars: String(part.value || '').length });
 				} else if (isImageDataPart(part)) {
 					parts.push({ kind: 'image', chars: 0 });
-				} else if (part instanceof vscode.LanguageModelToolCallPart || part instanceof vscode.LanguageModelToolResultPart) {
+				} else if (
+					part instanceof vscode.LanguageModelToolCallPart ||
+					part instanceof vscode.LanguageModelToolResultPart
+				) {
 					parts.push({ kind: 'tool', chars: 0 });
 				} else {
 					parts.push({ kind: 'unknown', chars: 0 });
