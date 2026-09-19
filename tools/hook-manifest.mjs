@@ -5,7 +5,7 @@ import path from 'node:path';
 export const HOOK_FILES = Object.freeze([
  'build_index.js', 'skill_filter.js', 'context_monitor.js', 'prefix_canon.js',
  'compact_fold.js', 'text_parts.js', 'tool_compress.js', 'source_sidecar.js',
- 'session_context.js', 'session_state.js', 'store_persist.js', 'event_log.js', 'index_evidence.js',
+ 'session_context.js', 'session_queue.js', 'session_state.js', 'store_persist.js', 'event_log.js', 'index_evidence.js',
  'request_catalog.js',
 ]);
 

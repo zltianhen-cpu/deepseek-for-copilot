@@ -68,6 +68,7 @@ export interface MessageFilterContext {
 	requestId?: string;
 	workspaceId?: string;
 	runtime?: { extensionVersion: string };
+	signal?: AbortSignal;
 	/** 来自 convert 阶段的来源侧车厢数据，用于区分 user-host 与 unproven。 */
 	sourceSidecar?: unknown;
 	sessionKey?: string;
@@ -87,6 +88,7 @@ export interface MessageFilterContext {
 
 interface FilterModule {
 	filterOpenAIMessages?: (messages: unknown[], opts?: MessageFilterContext) => unknown;
+	filterOpenAIMessagesQueued?: (messages: unknown[], opts?: MessageFilterContext) => unknown;
 }
 
 interface MonitorModule {
@@ -244,11 +246,17 @@ export async function applyMessageFilter(
 		const beforeChars = safeCountMessageChars(messages);
 		const beforeCount = messages.length;
 		const sessionKey = foldSessionKey(ctx);
-		const out = getFilterModule()?.filterOpenAIMessages?.(messages, {
+		const filterModule = getFilterModule();
+		const runFilter = filterModule?.filterOpenAIMessagesQueued;
+		if (!runFilter) {
+			throw new Error('queued message filter is unavailable');
+		}
+		const out = runFilter(messages, {
 			sessionKey,
 			requestId: ctx?.requestId,
 			workspaceId: ctx?.workspaceId ?? workspaceIdentity(),
 			runtime: { extensionVersion: EXTENSION_VERSION },
+			signal: ctx?.signal,
 			storePath: ctx?.storePath,
 			summarize: ctx?.summarize,
 			fitsBudget: ctx?.fitsBudget,

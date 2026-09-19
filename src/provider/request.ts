@@ -152,32 +152,42 @@ export async function prepareChatRequest({
 		deepseekMessages[0]?.role === 'user' ? 1 : 0,
 		convertMessages(systemPrefix, isThinkingModel, nativeImageInput).length,
 	);
-	await applyMessageFilter(deepseekMessages, {
-		requestId,
-		segment,
-		model: apiModel,
-		tools,
-		summarize: makeFoldSummarize(client, apiModel, token, tools, requestId, budgetPolicy),
-		protectedPrefixCount,
-		fitsBudget: (candidate) =>
-			assessRequestBudget(
-				{
-					model: apiModel,
-					messages: candidate as DeepSeekRequest['messages'],
-					stream: true,
-					tools,
-					tool_choice: tools?.length ? 'auto' : undefined,
-					max_tokens: maxTokens,
-					...(isThinkingModel
-						? { thinking: { type: 'enabled' as const }, reasoning_effort: 'max' as const }
-						: {}),
-					stream_options: { include_usage: true },
-				} as DeepSeekRequest,
-				budgetPolicy,
-			).ok,
-		sourceSidecar,
-		hostMessageChars,
-	});
+	const filterAbort = new AbortController();
+	const filterCancel =
+		token && typeof token.onCancellationRequested === 'function'
+			? token.onCancellationRequested(() => filterAbort.abort())
+			: { dispose() {} };
+	try {
+		await applyMessageFilter(deepseekMessages, {
+			requestId,
+			segment,
+			model: apiModel,
+			tools,
+			signal: filterAbort.signal,
+			summarize: makeFoldSummarize(client, apiModel, token, tools, requestId, budgetPolicy),
+			protectedPrefixCount,
+			fitsBudget: (candidate) =>
+				assessRequestBudget(
+					{
+						model: apiModel,
+						messages: candidate as DeepSeekRequest['messages'],
+						stream: true,
+						tools,
+						tool_choice: tools?.length ? 'auto' : undefined,
+						max_tokens: maxTokens,
+						...(isThinkingModel
+							? { thinking: { type: 'enabled' as const }, reasoning_effort: 'max' as const }
+							: {}),
+						stream_options: { include_usage: true },
+					} as DeepSeekRequest,
+					budgetPolicy,
+				).ok,
+			sourceSidecar,
+			hostMessageChars,
+		});
+	} finally {
+		filterCancel.dispose();
+	}
 	recordStage(trace, 'FILTERED_CANDIDATE', deepseekMessages, tools);
 	logMessageComposition(deepseekMessages, tools);
 	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
