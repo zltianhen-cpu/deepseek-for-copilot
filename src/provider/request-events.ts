@@ -46,18 +46,36 @@ function safeUsage(usage?: Record<string, unknown>): Record<string, number> {
 	}
 	return out;
 }
+function safeDetails(details?: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	for (const key of ['wireHash', 'historyHash', 'schemaHash', 'sessionRef']) {
+		const value = details?.[key];
+		if (typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)) out[key] = value;
+	}
+	for (const key of ['wireBytes', 'itemCount', 'offset', 'httpStatus']) {
+		const value = details?.[key];
+		if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) out[key] = value;
+	}
+	if (Array.isArray(details?.fingerprints))
+		out.fingerprints = details.fingerprints
+			.filter((v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))
+			.slice(0, 20);
+	return out;
+}
 export function recordRequestEvent(
 	requestId: string,
 	eventCode: string,
 	requestKind: string,
 	parentRequestId?: string,
 	usage?: Record<string, unknown>,
+	details?: Record<string, unknown>,
 ): void {
 	try {
 		if (process.env.DEEPSEEK_HOOKS_OFF === '1') return;
 		eventLog().reportEvent({
 			...provenance(),
 			...safeUsage(usage),
+			...safeDetails(details),
 			requestId,
 			parentRequestId,
 			eventCode,
@@ -159,6 +177,10 @@ export function readErrorSummary(filter: ErrorSummaryFilter = {}): ErrorSummaryR
 							'siteId',
 							'extensionVersion',
 							'hookHash',
+							'wireHash',
+							'historyHash',
+							'schemaHash',
+							'sessionRef',
 						]) {
 							if (typeof r[key] === 'string' && /^[a-zA-Z0-9_.-]{1,100}$/.test(r[key]))
 								safe[key] = r[key];

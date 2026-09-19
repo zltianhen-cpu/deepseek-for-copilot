@@ -74,6 +74,7 @@ export const MODELS: ModelDefinition[] = [
 		family: 'deepseek',
 		version: 'v4.1',
 		detail: 'Flash · 图片输入（看图，不生成图片）',
+		// 与已安装基线保持相同的输入额度；输出由独立预算检查预留。
 		maxInputTokens: 655360,
 		maxOutputTokens: 393216,
 		capabilities: {
@@ -111,6 +112,7 @@ export const MODELS: ModelDefinition[] = [
 		family: 'deepseek',
 		version: 'v4',
 		detail: 'Most capable reasoning model',
+		// 与已安装基线保持相同的输入额度。
 		maxInputTokens: 655360,
 		maxOutputTokens: 393216,
 		capabilities: {

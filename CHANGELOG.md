@@ -1,13 +1,12 @@
 # Changelog
 
-## 0.0.17 (2026-09-17)
+## 0.0.18 (2026-09-18)
 
-- Restore per-conversation cache state after a window reload: the retained skill set and the recovered request directory are now persisted and read back, so reloading a window no longer rebuilds them from scratch (fewer full-price re-reads on long conversations).
-- Make prompt folding more reliable: folded turns are recognised before any stored state is discarded, folded states can be inherited when a session is forked or restored, and the fold trigger is measured per character weight so long non-English conversations fold at the intended size instead of running unfolded.
-- Raise the fold waterline so long sessions rewrite history less often while keeping a larger recent tail intact; the on-disk projection store is compacted and migrates automatically on first load.
-- Harden the request pipeline against oversized inputs: unusually large prompt-derived text is no longer taken as the user question, name matching is bounded, and an implausible selection falls back to a safe baseline.
-- Validate the per-conversation retained set on load and cap its size, so an oversized record is discarded and re-selected instead of sticking for the rest of the conversation.
-- Add prefix and composition fingerprints to the local statistics log so cache behaviour can be audited locally without changing what is sent.
+- Validate complete main and summary requests at the HTTP boundary without trimming messages; include tools, output reserve and configured model limits.
+- Split oversized summaries into bounded, atomic tool groups. Preserve host instructions and the latest user task with its complete tool loop. Retain recoverable originals before committing or restoring a folded history.
+- Disable process-wide compression discounts in host token counting and restore the built-in input capacity to the installed baseline.
+- Link input, filtered candidates, wire attempts and actual usage with request IDs; retain observed usage when streaming is interrupted. Add read-only diagnostics for differing request histories.
+- Preserve the existing custom-model configuration and normalize missing tool parameter schemas, with dedicated regression coverage.
 
 ## 0.0.16 (2026-09-15)
 

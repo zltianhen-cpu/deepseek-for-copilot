@@ -15,7 +15,8 @@ const compiledRoot = process.env.CACHE_EXTENSION_TEST_DIR || path.join(__dirname
 const { DeepSeekClient } = require(path.join(compiledRoot, 'out/client/core.js'));
 const { makeFoldSummarize } = require(path.join(compiledRoot, 'out/provider/fold-summarize.js'));
 const client = new DeepSeekClient('https://example.invalid', 'test-placeholder');
-const request = { model: 'test', messages: [{ role: 'user', content: 'x' }], stream: false };
+const {bindRequestBudget,DEFAULT_BUDGET_POLICY}=require(path.join(compiledRoot,'out/request-budget.js'));
+const request = bindRequestBudget({ model: 'test', messages: [{ role: 'user', content: 'x' }], stream: false }, DEFAULT_BUDGET_POLICY);
 function response(t, finish, content) {
   t.mock.method(global, 'fetch', async () => ({ ok: true,
     json: async () => ({ choices: [{ finish_reason: finish, message: { content } }] }),

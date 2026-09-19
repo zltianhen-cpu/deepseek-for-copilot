@@ -93,6 +93,7 @@ code --install-extension zltianhen.deepseek-for-copilot
 | `deepseek-fork.baseUrl` | `https://api.deepseek.com` | API 端点——可改为自托管或代理部署地址 |
 | `deepseek-fork.maxTokens` | `0` | 最大输出 Token 数（`0` = 不限制）。可用于成本控制 |
 | `deepseek-fork.modelIdOverrides` | 预填官方 ID 映射 | 两个 DeepSeek 模型实际发送的 API 模型 ID。仅在使用模型名不同的兼容第三方 API 时需要修改 |
+| `deepseek-fork.customModels` | `[]` | 模型选择器里追加的额外模型，用于自建 / 中转网关（NewAPI、火山方舟、企业 LLM 网关等）。条目按配置顺序追加在内置模型之后；`id` 与内置重名时以自定义为准。非法条目会被跳过并在 DeepSeek 输出日志里记一条告警；价格表格式不对会被忽略，不会显示错价 |
 | `deepseek-fork.debugMode` | `minimal` | 诊断模式：`minimal` 仅上报 token 用量，`metadata` 输出隐私安全日志，`verbose` 将完整请求 dump 和 pipeline snapshot 写入扩展 global storage。完整 dump 可能包含敏感提示词文本、工具定义、文件片段和图片描述。使用 `DeepSeek Cache-Aware: 打开请求 Dump 目录` 打开 dump 位置 |
 | `deepseek-fork.visionModel` | *(自动)* | Pro 使用的视觉代理（Flash 为图片直接输入，不走代理；两个模型都只读图，不生成图片）。自动模式默认用 Flash 当代理；也可通过 `DeepSeek Cache-Aware: 配置视觉代理` 改用其他 VS Code 模型或 API 端点 |
 | `deepseek-fork.visionPrompt` | *(内置)* | 视觉代理用于描述图片附件的提示词，不影响 Flash 的图片直接输入。清空时回落到内置默认值 |
@@ -110,6 +111,36 @@ code --install-extension zltianhen.deepseek-for-copilot
   }
 }
 ```
+
+```
+
+新增网关上游模型（不改代码、不用等发版）：
+
+```json
+{
+  "deepseek-fork.customModels": [
+    {
+      "id": "deepseek-v4-1-flash-260910",
+      "name": "火山 DeepSeek v4.1 Flash",
+      "detail": "火山方舟上游 · 默认开启思考",
+      "maxInputTokens": 655360,
+      "maxOutputTokens": 393216,
+      "capabilities": {
+        "toolCalling": true,
+        "imageInput": false,
+        "thinking": {
+          "supportedEfforts": ["low", "high", "max"],
+          "defaultEffort": "high",
+          "canDisable": true
+        }
+      },
+      "requiresThinkingParam": true
+    }
+  ]
+}
+```
+
+能力项缺省取保守值（`toolCalling: true`、`imageInput: false`、不支持思考）。`pricing` 可选——不配则不显示价格提示；格式不对会被忽略，宁可不显示也不显示错价。
 
 ## 方案对比
 

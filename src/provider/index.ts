@@ -1,11 +1,14 @@
+import { newRequestId, recordRequestEvent } from './request-events';
+import { recordStage } from '../send-receipt';
 import vscode from 'vscode';
 import { AuthManager } from '../auth';
 import { getBaseUrl, getStabilizeToolListEnabled } from '../config';
-import { API_KEY_SECRET, CONFIG_SECTION, MODELS } from '../consts';
+import { API_KEY_SECRET, CONFIG_SECTION } from '../consts';
 import { isOfficialDeepSeekBaseUrl, normalizeBaseUrl } from '../endpoint';
 import { t } from '../i18n';
 import { logger } from '../logger';
 import { createCacheDiagnosticsRecorder, dumpProviderInput } from './debug';
+import { getAllModels } from './custom-models';
 import { toChatInfo } from './models';
 import { BalanceCurrencyResolver } from './pricing/currency';
 import { PricingRefreshScheduler } from './pricing/schedule';
@@ -145,7 +148,7 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 		if (hasKey) {
 			this.balanceCurrencyResolver.refreshInBackground();
 		}
-		return MODELS.map((model) =>
+		return getAllModels().map((model) =>
 			toChatInfo(model, hasKey, pricingCurrency, now, showPricingNotice),
 		);
 	}
@@ -163,7 +166,10 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 			tools: options.tools,
 		});
 
+		const requestId = newRequestId();
+		recordStage({ requestId, requestKind }, 'PROVIDER_INPUT', [...messages], options.tools);
 		dumpProviderInput({
+			requestId,
 			globalStorageUri: this.globalStorageUri,
 			segment,
 			modelInfo,
@@ -180,10 +186,13 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 			requestKind,
 		});
 		if (toolFlow.preflightHandled) {
+			recordRequestEvent(requestId, 'PREFLIGHT_HANDLED', requestKind);
 			return;
 		}
 
 		const prepared = await prepareChatRequest({
+			requestId,
+			requestKind,
 			authManager: this.authManager,
 			globalStorageUri: this.globalStorageUri,
 			modelInfo,
@@ -193,6 +202,15 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 			token,
 			cacheDiagnostics: this.cacheDiagnostics,
 			getVisionDescriber: () => this.vision.get(),
+		}).catch((error) => {
+			recordRequestEvent(requestId, 'REQUEST_REJECTED', requestKind);
+			if (
+				['request-budget-exceeded', 'missing-request-budget', 'invalid-request-budget'].includes(
+					error?.code,
+				)
+			)
+				error.message = t('request.budgetRejected');
+			throw error;
 		});
 
 		return streamChatCompletion({

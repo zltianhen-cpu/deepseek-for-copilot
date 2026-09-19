@@ -251,9 +251,42 @@ export function convertTools(
 		function: {
 			name: tool.name,
 			description: tool.description,
-			parameters: tool.inputSchema as Record<string, unknown> | undefined,
+			parameters: toToolParameters(tool.inputSchema),
 		},
 	}));
+}
+
+/**
+ * 把工具的 `inputSchema` 规整成一份合法的 JSON Schema 对象。
+ *
+ * 为什么必须兜底：VS Code 有 10 个内置工具不带 `inputSchema`（无参数工具，如
+ * `terminal_last_command` / `activate_*_tools`），值是 `undefined`；序列化时
+ * **值为 undefined 的键会被整个丢掉**，请求里这些工具就只剩 `name` +
+ * `description`。DeepSeek 官方接口宽容（忽略），但严格校验的上游（NewAPI 中转的
+ * 火山方舟通道等）直接 400：`tools[47].***.parameters must be valid JSON`。
+ *
+ * 策略：合法对象原样透传（对官方渠道零影响）；字符串先尝试 JSON.parse；其余
+ * （undefined / null / 空串 / 非法串 / 数组）一律补空 object schema。
+ */
+export function toToolParameters(inputSchema: unknown): Record<string, unknown> {
+	if (isPlainObject(inputSchema)) {
+		return inputSchema;
+	}
+	if (typeof inputSchema === 'string') {
+		try {
+			const parsed: unknown = JSON.parse(inputSchema);
+			if (isPlainObject(parsed)) {
+				return parsed;
+			}
+		} catch {
+			/* 非法 JSON → 落到空 schema */
+		}
+	}
+	return { type: 'object', properties: {} };
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /**

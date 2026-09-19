@@ -25,10 +25,6 @@ jobs:
 
       - run: npm run compile
 
-      - run: mkdir -p dist && npm run package
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: deepseek-for-copilot.vsix
-          path: dist/*.vsix
-          retention-days: 30
+      # ⛔ 这里不跑 `npm run package`：打包脚本 tools/build.mjs 是本机私有的（刻意
+      #    不进公开仓库），CI 上必然失败。CI 只做通用可重复的三件事：lint / format /
+      #    compile；正式打包走本地构建流程（构建内部会跑拆包体检 + 泄密扫描）。

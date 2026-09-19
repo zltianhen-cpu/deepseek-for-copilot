@@ -1,5 +1,7 @@
 import type { CancellationToken } from 'vscode';
 import { safeStringify } from '../json';
+import { createSendReceipt } from '../send-receipt';
+import { assertRequestBudget, getRequestBudgetPolicy } from '../request-budget';
 import { logger } from '../logger';
 import type {
 	DeepSeekRequest,
@@ -29,6 +31,7 @@ export class DeepSeekClient {
 		callbacks: StreamCallbacks,
 		cancellationToken?: CancellationToken,
 	): Promise<void> {
+		const receipt = createSendReceipt(request);
 		const controller = new AbortController();
 		const cancelListener = cancellationToken?.onCancellationRequested(() => {
 			controller.abort();
@@ -37,6 +40,7 @@ export class DeepSeekClient {
 			controller.abort();
 		}
 
+		let latestUsage: DeepSeekUsage | undefined;
 		try {
 			// Request usage stats in streaming responses so we can calibrate token counting.
 			const requestBody = {
@@ -44,13 +48,18 @@ export class DeepSeekClient {
 				stream_options: { include_usage: true },
 			};
 
+			if (controller.signal.aborted) return;
+			const serializedBody = safeStringify(requestBody);
+			assertRequestBudget(JSON.parse(serializedBody), getRequestBudgetPolicy(request));
+			if (controller.signal.aborted) return;
+			receipt.start(serializedBody);
 			const response = await fetch(`${this.baseUrl}/chat/completions`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${this.apiKey}`,
 				},
-				body: safeStringify(requestBody),
+				body: serializedBody,
 				signal: controller.signal,
 			});
 
@@ -58,6 +67,7 @@ export class DeepSeekClient {
 				throw await createHttpError(response, { baseUrl: this.baseUrl, request });
 			}
 
+			receipt.accepted(response.status);
 			if (!response.body) {
 				throw new Error('No response body received');
 			}
@@ -65,7 +75,6 @@ export class DeepSeekClient {
 			const reader = response.body.getReader();
 			const decoder = new TextDecoder();
 			let buffer = '';
-			let latestUsage: DeepSeekUsage | undefined;
 
 			// Accumulate tool call deltas by index, then emit on finish_reason=stop/tool_calls
 			const pendingToolCalls = new Map<number, DeepSeekToolCall>();
@@ -99,6 +108,7 @@ export class DeepSeekClient {
 							callbacks.onToolCall(tc);
 						}
 						pendingToolCalls.clear();
+						receipt.usage(latestUsage);
 						reportFinalUsage(callbacks, latestUsage);
 						callbacks.onDone();
 						return;
@@ -170,9 +180,11 @@ export class DeepSeekClient {
 				}
 			}
 
+			receipt.usage(latestUsage);
 			reportFinalUsage(callbacks, latestUsage);
 			callbacks.onDone();
 		} catch (error) {
+			receipt.failed();
 			if (isAbortError(error) && cancellationToken?.isCancellationRequested) {
 				return;
 			}
@@ -180,6 +192,8 @@ export class DeepSeekClient {
 			logger.error('DeepSeek request failed:', formatRequestError(normalizedError));
 			callbacks.onError(normalizedError);
 		} finally {
+			receipt.usage(latestUsage);
+			receipt.finish(cancellationToken?.isCancellationRequested);
 			cancelListener?.dispose();
 		}
 	}
@@ -192,6 +206,7 @@ export class DeepSeekClient {
 		timeoutMs: number,
 		cancellationToken?: CancellationToken,
 	): Promise<string> {
+		const receipt = createSendReceipt(request);
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs || 1));
 		const cancelListener = cancellationToken?.onCancellationRequested(() => {
@@ -201,21 +216,29 @@ export class DeepSeekClient {
 			controller.abort();
 		}
 		try {
+			controller.signal.throwIfAborted();
+			const serializedBody = safeStringify({ ...request, stream: false });
+			assertRequestBudget(JSON.parse(serializedBody), getRequestBudgetPolicy(request));
+			controller.signal.throwIfAborted();
+			receipt.start(serializedBody);
 			const response = await fetch(`${this.baseUrl}/chat/completions`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${this.apiKey}`,
 				},
-				body: safeStringify({ ...request, stream: false }),
+				body: serializedBody,
 				signal: controller.signal,
 			});
 			if (!response.ok) {
 				throw await createHttpError(response, { baseUrl: this.baseUrl, request });
 			}
+			receipt.accepted(response.status);
 			const data = (await response.json()) as {
+				usage?: DeepSeekUsage;
 				choices?: Array<{ finish_reason?: string; message?: { content?: unknown } }>;
 			};
+			receipt.usage(data?.usage);
 			const choice = data?.choices?.[0];
 			// 半截摘要不能替代完整历史；未明确完整结束也拒绝提交。
 			if (choice?.finish_reason !== 'stop') {
@@ -228,8 +251,12 @@ export class DeepSeekClient {
 				throw Object.assign(new Error('Summary empty'), { code: 'empty' });
 			}
 			return content;
+		} catch (error) {
+			receipt.failed();
+			throw error;
 		} finally {
 			clearTimeout(timer);
+			receipt.finish(cancellationToken?.isCancellationRequested);
 			cancelListener?.dispose();
 		}
 	}

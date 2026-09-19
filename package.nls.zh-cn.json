@@ -30,5 +30,17 @@
   "deepseek-fork.config.modelIdOverrides.deepseek-v4-pro.description": "DeepSeek V4 Pro 的 API 模型 ID。",
   "deepseek-fork.config.visionModel.description": "DeepSeek V4 Pro 使用的视觉代理（Flash 为图片直接输入，不走代理；两个模型都只读图，不生成图片）。未设置时，自动模式默认用 DeepSeek Flash 当代理。可通过[配置视觉代理](command:deepseek-fork.setVisionModel)改用其他 VS Code 模型或 API 端点。",
   "deepseek-fork.config.visionPrompt.description": "视觉代理用于描述图片附件的提示词，不影响 DeepSeek Flash 的图片直接输入。清空时回落到内置默认值。\n\n[配置视觉代理](command:deepseek-fork.setVisionModel)",
-  "deepseek-fork.config.modelIdOverrides.deepseek-flash.description": "覆盖该模型实际发送给 DeepSeek 的 API 模型名。"
+  "deepseek-fork.config.modelIdOverrides.deepseek-flash.description": "覆盖该模型实际发送给 DeepSeek 的 API 模型名。",
+  "deepseek-fork.config.customModels.description": "模型选择器里追加的额外模型，用于自建 / 中转网关（NewAPI、火山方舟、企业 LLM 网关等）。条目按配置顺序追加在内置模型之后；`id` 与内置重名时以自定义为准。非法条目会被跳过，并在 DeepSeek 输出日志里记一条告警——坏条目绝不会弄坏 provider。\n\n示例：\n\n```json\n[\n  {\n    \"id\": \"deepseek-v4-1-flash-260910\",\n    \"name\": \"火山 DeepSeek v4.1 Flash\",\n    \"detail\": \"火山方舟上游 · 默认开启思考\",\n    \"maxInputTokens\": 655360,\n    \"maxOutputTokens\": 393216,\n    \"capabilities\": {\n      \"toolCalling\": true,\n      \"imageInput\": false,\n      \"thinking\": { \"supportedEfforts\": [\"low\", \"high\", \"max\"], \"defaultEffort\": \"high\", \"canDisable\": true }\n    },\n    \"requiresThinkingParam\": true\n  }\n]\n```",
+  "deepseek-fork.config.customModels.item.id": "发给服务端的 API 模型名（必填）。",
+  "deepseek-fork.config.customModels.item.name": "模型选择器里显示的名字（必填）。",
+  "deepseek-fork.config.customModels.item.detail": "名字下方的副标题（可选）。",
+  "deepseek-fork.config.customModels.item.tooltip": "悬停提示（可选）。",
+  "deepseek-fork.config.customModels.item.family": "模型家族（可选，默认 `deepseek`）。",
+  "deepseek-fork.config.customModels.item.version": "版本标签（可选）。",
+  "deepseek-fork.config.customModels.item.maxInputTokens": "最大输入 token（必填，正整数）。",
+  "deepseek-fork.config.customModels.item.maxOutputTokens": "最大输出 token（必填，正整数）。",
+  "deepseek-fork.config.customModels.item.capabilities": "能力声明。缺省取保守值：`toolCalling: true`、`imageInput: false`、不支持思考。",
+  "deepseek-fork.config.customModels.item.requiresThinkingParam": "是否发送思考参数。默认 `true`。",
+  "deepseek-fork.config.customModels.item.pricing": "可选价目表（`USD` / `CNY`，各含 `offPeak` 与 `peak`，字段为 `cacheHitInput` / `cacheMissInput` / `output`，单位：每百万 token）。不配则不显示价格提示；格式不对会被忽略。"
 }

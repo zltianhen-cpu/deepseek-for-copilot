@@ -30,5 +30,17 @@
   "deepseek-fork.config.modelIdOverrides.deepseek-v4-pro.description": "API model ID for DeepSeek V4 Pro",
   "deepseek-fork.config.visionModel.description": "Vision Proxy used by DeepSeek V4 Pro. Images are input only — neither model generates images. When unset, auto mode uses DeepSeek Flash as the proxy. Configure a different VS Code model or API endpoint with [Configure Vision Proxy](command:deepseek-fork.setVisionModel).",
   "deepseek-fork.config.visionPrompt.description": "Prompt used by the Vision Proxy to describe image attachments. It does not affect DeepSeek Flash's direct image input. Clearing it falls back to the built-in default.\n\n[Configure Vision Proxy](command:deepseek-fork.setVisionModel)",
-  "deepseek-fork.config.modelIdOverrides.deepseek-flash.description": "Override the API model id sent to DeepSeek for this model."
+  "deepseek-fork.config.modelIdOverrides.deepseek-flash.description": "Override the API model id sent to DeepSeek for this model.",
+  "deepseek-fork.config.customModels.description": "Extra models to expose in the model picker, for self-hosted OpenAI-compatible gateways (NewAPI / Volcengine Ark / enterprise LLM gateways). Entries are appended after the built-in models in the order given; an entry whose `id` matches a built-in replaces it. Invalid entries are skipped with a warning in the DeepSeek output log, so a broken entry can never take the provider down.\n\nExample:\n\n```json\n[\n  {\n    \"id\": \"deepseek-v4-1-flash-260910\",\n    \"name\": \"Volcengine DeepSeek v4.1 Flash\",\n    \"detail\": \"Volcengine Ark - thinking on by default\",\n    \"maxInputTokens\": 655360,\n    \"maxOutputTokens\": 393216,\n    \"capabilities\": {\n      \"toolCalling\": true,\n      \"imageInput\": false,\n      \"thinking\": { \"supportedEfforts\": [\"low\", \"high\", \"max\"], \"defaultEffort\": \"high\", \"canDisable\": true }\n    },\n    \"requiresThinkingParam\": true\n  }\n]\n```",
+  "deepseek-fork.config.customModels.item.id": "API model name sent to the endpoint (required).",
+  "deepseek-fork.config.customModels.item.name": "Name shown in the model picker (required).",
+  "deepseek-fork.config.customModels.item.detail": "Short subtitle shown under the name (optional).",
+  "deepseek-fork.config.customModels.item.tooltip": "Hover tooltip (optional).",
+  "deepseek-fork.config.customModels.item.family": "Model family (optional, default `deepseek`).",
+  "deepseek-fork.config.customModels.item.version": "Version label (optional).",
+  "deepseek-fork.config.customModels.item.maxInputTokens": "Maximum input tokens (required, positive integer).",
+  "deepseek-fork.config.customModels.item.maxOutputTokens": "Maximum output tokens (required, positive integer).",
+  "deepseek-fork.config.customModels.item.capabilities": "Capabilities. Defaults are conservative: `toolCalling: true`, `imageInput: false`, no thinking.",
+  "deepseek-fork.config.customModels.item.requiresThinkingParam": "Whether a thinking parameter is sent. Default `true`.",
+  "deepseek-fork.config.customModels.item.pricing": "Optional price table (`USD` / `CNY`, each with `offPeak` and `peak`, holding `cacheHitInput` / `cacheMissInput` / `output` per million tokens). Omit it to show no price hint; a malformed table is ignored."
 }

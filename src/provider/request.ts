@@ -1,10 +1,12 @@
 import vscode from 'vscode';
+import { createHash } from 'node:crypto';
+import { bindRequestTrace, recordStage } from '../send-receipt';
 import { newRequestId, recordRequestEvent } from './request-events';
 import { AuthManager } from '../auth';
 import { DeepSeekClient } from '../client';
 import { getApiModelId, getBaseUrl, getMaxTokens } from '../config';
-import { MODELS } from '../consts';
 import { isOfficialDeepSeekBaseUrl } from '../endpoint';
+import { getAllModels } from './custom-models';
 import { t } from '../i18n';
 import type { DeepSeekRequest } from '../types';
 import { buildSourceSidecar, convertMessages, countMessageChars } from './convert';
@@ -15,9 +17,23 @@ import {
 } from './debug';
 import { getConfiguredThinkingEffort, type ModelConfigurationOptions } from './models';
 import type { ReplayMarkerMetadata } from './replay';
-import { classifyDeepSeekRequest, shouldForceThinkingNone, type RequestKind } from './routing';
+import {
+	classifyDeepSeekRequest,
+	classifyProviderRequest,
+	shouldForceThinkingNone,
+	type RequestKind,
+} from './routing';
 import type { ConversationSegment } from './segment';
 import { applyMessageFilter, logMessageComposition } from './chat-hooks';
+import {
+	assessRequestBudget,
+	assertRequestBudget,
+	bindRequestBudget,
+	DEFAULT_BUDGET_POLICY,
+	type RequestBudgetPolicy,
+} from '../request-budget';
+import { LANGUAGE_MODEL_CHAT_SYSTEM_ROLE, MODELS } from '../consts';
+import { estimateMessageChars } from './tokens';
 import { makeFoldSummarize } from './fold-summarize';
 import { collectTrailingToolResultIds, prepareRequestTools } from './tools/request';
 import {
@@ -43,6 +59,8 @@ export interface PreparedChatRequest {
 }
 
 export interface PrepareChatRequestOptions {
+	requestId?: string;
+	requestKind?: RequestKind;
 	authManager: AuthManager;
 	globalStorageUri: vscode.Uri;
 	modelInfo: vscode.LanguageModelChatInformation;
@@ -55,6 +73,8 @@ export interface PrepareChatRequestOptions {
 }
 
 export async function prepareChatRequest({
+	requestId = newRequestId(),
+	requestKind: initialRequestKind,
 	authManager,
 	globalStorageUri,
 	modelInfo,
@@ -65,8 +85,9 @@ export async function prepareChatRequest({
 	cacheDiagnostics,
 	getVisionDescriber,
 }: PrepareChatRequestOptions): Promise<PreparedChatRequest> {
-	const requestId = newRequestId();
-	recordRequestEvent(requestId, 'PREPARE', 'main-agent');
+	const initialKind =
+		initialRequestKind ?? classifyProviderRequest({ messages, tools: options.tools });
+	recordRequestEvent(requestId, 'PREPARE', initialKind);
 	const apiKey = await authManager.getApiKey();
 	if (!apiKey) {
 		throw new Error(t('auth.notConfigured'));
@@ -74,8 +95,20 @@ export async function prepareChatRequest({
 
 	const baseUrl = getBaseUrl();
 	const client = new DeepSeekClient(baseUrl, apiKey);
-	const modelDef = MODELS.find((m) => m.id === modelInfo.id);
-	const thinkingCapability = modelDef?.capabilities.thinking;
+	const modelDef = getAllModels().find((m) => m.id === modelInfo.id);
+	if (!modelDef)
+		throw Object.assign(new Error('Model budget is not configured'), {
+			code: 'missing-request-budget',
+		});
+	const budgetPolicy: RequestBudgetPolicy = {
+		maxInputTokens: modelDef.maxInputTokens,
+		maxOutputTokens: modelDef.maxOutputTokens,
+		maxContextTokens: MODELS.some((m) => m.id === modelDef.id)
+			? modelDef.maxInputTokens + modelDef.maxOutputTokens
+			: modelDef.maxInputTokens,
+		imageTokens: DEFAULT_BUDGET_POLICY.imageTokens,
+	};
+	const thinkingCapability = modelDef.capabilities.thinking;
 	const isThinkingModel = Boolean(thinkingCapability);
 	const nativeImageInput = modelDef?.capabilities.nativeImageInput === true;
 	const maxTokens = getMaxTokens();
@@ -94,17 +127,58 @@ export async function prepareChatRequest({
 	// 而 system 提示可能一个字没动。故在钩子之前先备好 tools 并交给探针做指纹。
 	// （prepareRequestTools 只依赖 modelDef/options，上移无副作用）
 	const tools = prepareRequestTools(modelDef?.capabilities.toolCalling, options);
+	const trace = {
+		requestId,
+		requestKind: initialKind,
+		sessionRef: createHash('sha256')
+			.update(segment.segmentId ?? 'unknown')
+			.digest('hex'),
+	};
+	recordStage(trace, 'CONVERTED', deepseekMessages, tools);
 	// 本扩展内建钩子（顺序不可颠倒：第二个要看到第一个处理后的结果）
 	// 折叠落盘钥匙在 chat-hooks 里拼：工作区|segmentId|模型。sid 不进钥匙。
 	const apiModel = getApiModelId(modelInfo.id);
+	// 实发比的分母：convert 之前的宿主口径（含 convert 阶段会丢掉的那一刀）
+	const hostMessageChars = estimateMessageChars(messages);
+	// 宿主 System=3 是非公开枚举；只依据明确角色保护转换后的前缀。
+	const firstNonSystem = resolvedMessages.findIndex(
+		(m) => Number(m.role) !== LANGUAGE_MODEL_CHAT_SYSTEM_ROLE,
+	);
+	const systemPrefix = resolvedMessages.slice(
+		0,
+		firstNonSystem < 0 ? resolvedMessages.length : firstNonSystem,
+	);
+	const protectedPrefixCount = Math.max(
+		deepseekMessages[0]?.role === 'user' ? 1 : 0,
+		convertMessages(systemPrefix, isThinkingModel, nativeImageInput).length,
+	);
 	await applyMessageFilter(deepseekMessages, {
 		requestId,
 		segment,
 		model: apiModel,
 		tools,
-		summarize: makeFoldSummarize(client, apiModel, token, tools, requestId),
+		summarize: makeFoldSummarize(client, apiModel, token, tools, requestId, budgetPolicy),
+		protectedPrefixCount,
+		fitsBudget: (candidate) =>
+			assessRequestBudget(
+				{
+					model: apiModel,
+					messages: candidate as DeepSeekRequest['messages'],
+					stream: true,
+					tools,
+					tool_choice: tools?.length ? 'auto' : undefined,
+					max_tokens: maxTokens,
+					...(isThinkingModel
+						? { thinking: { type: 'enabled' as const }, reasoning_effort: 'max' as const }
+						: {}),
+					stream_options: { include_usage: true },
+				} as DeepSeekRequest,
+				budgetPolicy,
+			).ok,
 		sourceSidecar,
+		hostMessageChars,
 	});
+	recordStage(trace, 'FILTERED_CANDIDATE', deepseekMessages, tools);
 	logMessageComposition(deepseekMessages, tools);
 	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 
@@ -126,6 +200,8 @@ export async function prepareChatRequest({
 		request: baseRequest,
 		inputMessages: messages,
 	});
+	if (requestKind !== initialKind)
+		recordRequestEvent(requestId, 'REQUEST_KIND_RESOLVED', requestKind);
 	const configuredThinkingEffort = thinkingCapability
 		? getConfiguredThinkingEffort(options as ModelConfigurationOptions, thinkingCapability)
 		: 'none';
@@ -145,7 +221,11 @@ export async function prepareChatRequest({
 				}
 			: {}),
 	};
+	bindRequestBudget(request, budgetPolicy);
+	bindRequestTrace(request, { ...trace, requestKind });
+	assertRequestBudget(request);
 	dumpDeepSeekRequest(request, {
+		requestId,
 		globalStorageUri,
 		segment,
 		requestKind,

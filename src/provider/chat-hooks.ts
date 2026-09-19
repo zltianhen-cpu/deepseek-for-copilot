@@ -32,6 +32,9 @@ import * as fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import * as path from 'node:path';
 import vscode from 'vscode';
+import { logger } from '../logger';
+import type { DeepSeekMessage } from '../types';
+import { countMessageChars } from './convert';
 
 // ---- 路径解析（包内相对定位，不写任何绝对路径）----
 
@@ -73,9 +76,13 @@ export interface MessageFilterContext {
 	model?: string;
 	summarize?: (
 		foldMsgs: unknown[],
-		extra?: { prefixMessages?: unknown[]; tools?: unknown },
+		extra?: { prefixMessages?: unknown[]; tools?: unknown; protectedPrefixCount?: number },
 	) => string | Promise<string>;
 	tools?: unknown;
+	/** convert 之前的宿主口径字符数（实发比的分母；缺省退回「转换后」的本地量）。 */
+	hostMessageChars?: number;
+	fitsBudget?: (messages: unknown[]) => boolean;
+	protectedPrefixCount?: number;
 }
 
 interface FilterModule {
@@ -213,6 +220,18 @@ export function workspaceIdentity(): string {
 		return '';
 	}
 }
+/** 实发比的最小样本量（字符）：太小会引入取整噪声，不值一算。 */
+const MIN_RATIO_SAMPLE_CHARS = 2000;
+
+/** 量「出门前/后」的总字符数；任何异常都不影响筛选（只是不发布比值）。 */
+function safeCountMessageChars(messages: unknown[]): number {
+	try {
+		return countMessageChars(messages as DeepSeekMessage[]);
+	} catch {
+		return 0;
+	}
+}
+
 export async function applyMessageFilter(
 	messages: unknown[],
 	ctx?: MessageFilterContext,
@@ -222,6 +241,8 @@ export async function applyMessageFilter(
 	}
 	scheduleAutoBuild();
 	try {
+		const beforeChars = safeCountMessageChars(messages);
+		const beforeCount = messages.length;
 		const sessionKey = foldSessionKey(ctx);
 		const out = getFilterModule()?.filterOpenAIMessages?.(messages, {
 			sessionKey,
@@ -230,13 +251,33 @@ export async function applyMessageFilter(
 			runtime: { extensionVersion: EXTENSION_VERSION },
 			storePath: ctx?.storePath,
 			summarize: ctx?.summarize,
+			fitsBudget: ctx?.fitsBudget,
+			protectedPrefixCount: ctx?.protectedPrefixCount,
 			tools: ctx?.tools,
 			sourceSidecar: ctx?.sourceSidecar,
 		});
 		if (out && typeof (out as Promise<unknown>).then === 'function') {
 			await out;
 		}
+
+		// 只观察前后体积；不向无会话身份的宿主计数发布折扣。
+		// 宿主数的是未折叠的原文，折叠/筛选省下的量它看不见 → 它会在原文很大时就
+		// 提前压缩；报出真实比值后，它的尺子量到的就 ≈ 我们真正发出去的。
+		// 分母优先用「转换前的宿主口径」（hostMessageChars，request.ts 传入）——
+		// 它含 convert 阶段丢掉的那一刀（思考块/标记等），r ≈ 实发 ÷ 宿主原始量；
+		// 缺省（未传 / 样本太小）退回「转换后」的本地量（与旧口径一致）。
+		const afterChars = safeCountMessageChars(messages);
+		const hostChars = ctx?.hostMessageChars ?? 0;
+		const baseChars = hostChars >= MIN_RATIO_SAMPLE_CHARS ? hostChars : beforeChars;
+		if (baseChars >= MIN_RATIO_SAMPLE_CHARS && afterChars > 0) {
+			const ratio = afterChars / baseChars;
+			logger.info(
+				'[fold-ratio]',
+				`host=${hostChars} conv=${beforeChars} out=${afterChars} r=${ratio.toFixed(3)} msgs=${beforeCount}->${messages.length}`,
+			);
+		}
 	} catch {
+		// 钩子异常 → 比值清零，退回「技能目录折减」口径（宁可多算，不冒撞上限的险）
 		/* HOOK: never break chat */
 	}
 }

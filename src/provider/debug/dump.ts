@@ -96,6 +96,7 @@ interface SystemPromptSummary extends CustomizationsSummary {
 }
 
 export interface DumpDeepSeekRequestOptions {
+	requestId?: string;
 	globalStorageUri: vscode.Uri;
 	segment: ConversationSegment;
 	requestKind?: RequestKind;
@@ -112,6 +113,7 @@ export interface DumpDeepSeekRequestOptions {
 }
 
 export interface DumpProviderInputOptions {
+	requestId?: string;
 	globalStorageUri: vscode.Uri;
 	segment: ConversationSegment;
 	requestKind?: RequestKind;
@@ -317,6 +319,7 @@ function createProviderInputSnapshot(
 	context: DumpContext,
 ): object {
 	return createDumpSnapshot({
+		requestId: options.requestId,
 		stage: 'provider-input',
 		context,
 		segment: options.segment,
@@ -343,6 +346,7 @@ function createPipelineSnapshot(
 	context: DumpContext,
 ): object {
 	return createDumpSnapshot({
+		requestId: options.requestId,
 		stage,
 		context,
 		segment: options.segment,
@@ -369,6 +373,7 @@ function createPipelineSnapshot(
 }
 
 function createDumpSnapshot(options: {
+	requestId?: string;
 	stage: DumpStage;
 	context: DumpContext;
 	segment: ConversationSegment;
@@ -383,6 +388,7 @@ function createDumpSnapshot(options: {
 		serializeMessage(message, index),
 	);
 	return {
+		requestId: options.requestId,
 		stage: options.stage,
 		timestamp: options.context.timestamp,
 		basename: options.context.basename,

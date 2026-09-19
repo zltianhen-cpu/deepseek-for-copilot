@@ -93,6 +93,7 @@ Both support optional thinking mode and tool calling, with a **655,360 input tok
 | `deepseek-fork.baseUrl` | `https://api.deepseek.com` | API endpoint — change for self-hosted / proxied deployments |
 | `deepseek-fork.maxTokens` | `0` | Max output tokens (`0` = no limit). Useful for cost control |
 | `deepseek-fork.modelIdOverrides` | prefilled official ID map | API model IDs actually sent for the two DeepSeek models. Change only for compatible third-party APIs with different model names |
+| `deepseek-fork.customModels` | `[]` | Extra models to expose in the model picker, for self-hosted / proxied gateways (NewAPI, Volcengine Ark, enterprise LLM gateways). Entries are appended after the built-in models in the order given; an entry whose `id` matches a built-in replaces it. Invalid entries are skipped with a warning in the DeepSeek output log, and a malformed price table is ignored rather than shown |
 | `deepseek-fork.debugMode` | `minimal` | Diagnostic mode: `minimal` for token usage only, `metadata` for privacy-preserving logs, or `verbose` for full request dumps and pipeline snapshots under extension global storage. Full dumps may include sensitive prompt text, tool schemas, file snippets, and image descriptions. Use `DeepSeek Cache-Aware: Open Request Dumps Folder` to open the dump location |
 | `deepseek-fork.visionModel` | *(auto)* | Vision Proxy used by Pro (Flash takes images directly as input and bypasses the proxy; neither model generates images). Auto mode uses Flash as the proxy by default; configure another VS Code model or API endpoint with `DeepSeek Cache-Aware: Configure Vision Proxy` |
 | `deepseek-fork.visionPrompt` | *(built-in)* | Prompt used by the Vision Proxy to describe image attachments. It does not affect Flash's direct image input. Clearing it falls back to the built-in default |
@@ -110,6 +111,34 @@ Example `settings.json` override for compatible API proxies:
   }
 }
 ```
+
+Adding a model that your gateway exposes (no code change or new release needed):
+
+```json
+{
+  "deepseek-fork.customModels": [
+    {
+      "id": "deepseek-v4-1-flash-260910",
+      "name": "Volcengine DeepSeek v4.1 Flash",
+      "detail": "Volcengine Ark - thinking on by default",
+      "maxInputTokens": 1000000,
+      "maxOutputTokens": 393216,
+      "capabilities": {
+        "toolCalling": true,
+        "imageInput": false,
+        "thinking": {
+          "supportedEfforts": ["low", "high", "max"],
+          "defaultEffort": "high",
+          "canDisable": true
+        }
+      },
+      "requiresThinkingParam": true
+    }
+  ]
+}
+```
+
+Capability defaults are conservative (`toolCalling: true`, `imageInput: false`, no thinking). `pricing` is optional — omit it to show no price hint; a malformed table is ignored so a wrong price is never displayed.
 
 ## Compared to alternatives
 
