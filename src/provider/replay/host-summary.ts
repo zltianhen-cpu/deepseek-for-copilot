@@ -133,14 +133,20 @@ export class HostSummaryReplayCache {
 					)
 				)
 					return no('conflict');
-				if (entry.output)
+				if (entry.output) {
+					const restored = copy([...messages]);
+					for (let i = 0; i < history.length; i++) {
+						if (!restored[i].reasoning_content && entry.reasoning[i])
+							restored[i].reasoning_content = entry.reasoning[i];
+					}
 					return {
 						status: 'restored',
 						restored: history.filter(
 							(message, i) => !message.reasoning_content && entry.reasoning[i],
 						).length,
-						messages: [...copy(entry.output), copy(messages.at(-1)!)],
+						messages: restored,
 					};
+				}
 			}
 			if (Date.now() >= deadline) return no(entry ? 'pending' : 'unavailable');
 			// 摘要和正常请求可任意先后到达；只等前处理，绝不等模型生成回复。

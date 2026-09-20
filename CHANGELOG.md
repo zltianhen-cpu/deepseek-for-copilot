@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.22 (2026-09-20)
+
+- Keep the host’s complete conversation-summary history intact when the normal Agent request was folded. Verified replay now restores missing reasoning only; it never substitutes the shorter Agent payload for the host’s 329-message summary input.
+- Add a regression case for the observed 329-to-112 mismatch, retain strict conversation and history authentication, and leave cancellation and main-chat folding unchanged.
+
 ## 0.0.21 (2026-09-20)
 
 - Preserve historical message additions across a VS Code window reload when the host supplies user content as text parts. Restore saved pin locations using the same text extraction used to create them, and persist newly assigned locations after the append succeeds.

@@ -127,7 +127,7 @@ test('普通用户提到摘要或引用模板不误分', () => {
 		assert.equal(routing.classifyProviderRequest({ messages }), 'main-agent');
 	}
 });
-test('实际 prepare：补回思考并逐字复用处理后的前文，摘要不调用有状态钩子', async (t) => {
+test('实际 prepare：只补思考且保留摘要原文，摘要不调用有状态钩子', async (t) => {
 	let calls = 0;
 	hooks.applyMessageFilter = async (messages) => {
 		calls++;
@@ -138,7 +138,9 @@ test('实际 prepare：补回思考并逐字复用处理后的前文，摘要不
 	const before = JSON.stringify(input);
 	const replay = await prepare(input);
 	assert.equal(replay.requestKind, 'host-summary');
-	assert.deepEqual(replay.request.messages.slice(0, -1), main.request.messages);
+	assert.notDeepEqual(replay.request.messages.slice(0, -1), main.request.messages);
+	assert.deepEqual(replay.request.messages[0].content, [{ type: 'text', text: 'You are an expert AI programming assistant. Stable instructions.' }]);
+	assert.equal(replay.request.messages[2].reasoning_content, '先核对文件，保持原文\n完整。');
 	assert.deepEqual(replay.request.messages.at(-1).content, [{ type: 'text', text: SUMMARY }]);
 	assert.equal(calls, 1);
 	assert.equal(JSON.stringify(input), before);
@@ -172,7 +174,7 @@ test('实际 prepare：补回思考并逐字复用处理后的前文，摘要不
 			},
 		});
 	assert.equal(wire.length, 2);
-	assert.deepEqual(wire[1].messages.slice(0, -1), wire[0].messages, 'HTTP 实发仍保持前文');
+	assert.deepEqual(wire[1].messages, replay.request.messages, 'HTTP 实发保持已认证的摘要原文');
 	await prepare(prefix());
 	assert.equal(calls, 2, '正常聊天仍进入原管线');
 });
@@ -200,7 +202,8 @@ test('摘要等待并发正常请求的前处理结束，不等模型回答', as
 	const summaryPromise = prepare(summary(), options('concurrent'));
 	release();
 	const [main, replay] = await Promise.all([mainPromise, summaryPromise]);
-	assert.deepEqual(replay.request.messages.slice(0, -1), main.request.messages);
+	assert.notDeepEqual(replay.request.messages.slice(0, -1), main.request.messages);
+	assert.deepEqual(replay.request.messages[0].content, [{ type: 'text', text: 'You are an expert AI programming assistant. Stable instructions.' }]);
 	assert.equal(calls, 1);
 });
 
@@ -237,6 +240,29 @@ test('恢复器接口已接入，内存有界且匹配严格', async (t) => {
 	await t.test('完整历史恢复', async () =>
 		assert.deepEqual((await seeded().recover(scope, incoming())).messages.slice(0, -1), raw),
 	);
+	await t.test('主请求折短后摘要仍保留宿主完整历史', async () => {
+		const cache = new HostSummaryReplayCache(config);
+		const ticket = cache.begin(scope, raw);
+		cache.complete(ticket, [{ role: 'user', content: 'folded short history' }]);
+		const result = await cache.recover(scope, incoming());
+		assert.deepEqual(result.messages.slice(0, -1), raw);
+		assert.equal(result.restored, 1);
+	});
+	await t.test('事故形状：329 条宿主输入不可被 112 条主请求输出替换', async () => {
+		const history = Array.from({ length: 329 }, (_, i) =>
+			i === 150
+				? { role: 'assistant', content: 'answer', reasoning_content: 'thinking' }
+				: { role: 'user', content: `original-${i}` },
+		);
+		const cache = new HostSummaryReplayCache({ ...config, maxBytes: 500000 });
+		const ticket = cache.begin(scope, history);
+		cache.complete(ticket, history.slice(0, 112));
+		const request = [...clone(history), { role: 'user', content: SUMMARY }];
+		request[150].reasoning_content = '';
+		const result = await cache.recover(scope, request);
+		assert.equal(result.messages.length, 330);
+		assert.deepEqual(result.messages.slice(0, -1), history);
+	});
 	await t.test('摘要先到，等待随后进入的正常请求记录', async () => {
 		const cache = new HostSummaryReplayCache({ ...config, waitMs: 100 });
 		const replay = cache.recover(scope, incoming());
