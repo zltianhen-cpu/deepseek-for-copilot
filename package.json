@@ -3,7 +3,7 @@
 	"displayName": "%displayName%",
 	"description": "Use DeepSeek Flash and V4 Pro in Copilot Chat with image input (reads images, never generates them), Vision Proxy, reasoning, and agent tools.",
 	"icon": "resources/icon.png",
-	"version": "0.0.19",
+	"version": "0.0.20",
 	"publisher": "zltianhen",
 	"license": "MIT",
 	"repository": {
@@ -164,7 +164,12 @@
 					"markdownDescription": "%deepseek-fork.config.customModels.description%",
 					"items": {
 						"type": "object",
-						"required": ["id", "name", "maxInputTokens", "maxOutputTokens"],
+						"required": [
+							"id",
+							"name",
+							"maxInputTokens",
+							"maxOutputTokens"
+						],
 						"properties": {
 							"id": {
 								"type": "string",
@@ -206,7 +211,10 @@
 								"description": "%deepseek-fork.config.customModels.item.capabilities%",
 								"properties": {
 									"toolCalling": {
-										"type": ["boolean", "integer"],
+										"type": [
+											"boolean",
+											"integer"
+										],
 										"default": true
 									},
 									"imageInput": {
@@ -218,10 +226,26 @@
 										"properties": {
 											"supportedEfforts": {
 												"type": "array",
-												"items": { "type": "string", "enum": ["low", "high", "max"] }
+												"items": {
+													"type": "string",
+													"enum": [
+														"low",
+														"high",
+														"max"
+													]
+												}
 											},
-											"defaultEffort": { "type": "string", "enum": ["low", "high", "max"] },
-											"canDisable": { "type": "boolean" }
+											"defaultEffort": {
+												"type": "string",
+												"enum": [
+													"low",
+													"high",
+													"max"
+												]
+											},
+											"canDisable": {
+												"type": "boolean"
+											}
 										}
 									}
 								}
@@ -237,7 +261,12 @@
 							},
 							"priceCategory": {
 								"type": "string",
-								"enum": ["low", "medium", "high", "very_high"]
+								"enum": [
+									"low",
+									"medium",
+									"high",
+									"very_high"
+								]
 							}
 						}
 					}

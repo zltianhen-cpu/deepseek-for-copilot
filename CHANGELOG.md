@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.20 (2026-09-20)
+
+- Recognize host conversation-summary requests separately from ordinary Agent turns. Preserve their historical reasoning by replaying a verified request snapshot from the same conversation, model, endpoint, and account.
+- Keep summary requests from rewriting the main conversation cache. Reject changed or ambiguous history, bound the in-memory replay cache, and handle either arrival order of concurrent main and summary requests.
+- Keep model, tools, thinking settings, and the appended summary instruction unchanged. If a verified snapshot is unavailable, preserve the incoming request and apply the existing budget check.
+
 ## 0.0.19 (2026-09-20)
 
 - Keep the Mermaid diagram tool available from the first Agent request. Normalize its definition when the host omits it mid-conversation, and render its diagram in chat without relying on the host's tool enablement state.

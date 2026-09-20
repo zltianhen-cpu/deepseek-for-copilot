@@ -4,6 +4,7 @@ import { deepSeekContentToText } from '../content';
 
 export type RequestKind =
 	| 'main-agent'
+	| 'host-summary'
 	| 'terminal-steering'
 	| 'todo-tracker'
 	| 'settings-resolver'
@@ -31,6 +32,10 @@ const GIT_COMMIT_MESSAGE_PREFIX =
 	'You are an AI programming assistant, helping a software developer to come with the best git commit message';
 const RENAME_SUGGESTIONS_PREFIX = 'You are a distinguished software engineer';
 const MAIN_AGENT_PREFIX = 'You are an expert AI programming assistant';
+const HOST_SUMMARY_PREFIX =
+	'The conversation has grown too large for the context window and must be compacted now.';
+const HOST_SUMMARY_SUFFIX =
+	'Your ONLY task right now is to produce a comprehensive summary of the conversation so far.';
 const TERMINAL_NOTIFICATION_PATTERN = /^\[Terminal\s+\S+\s+notification:/;
 const REQUEST_KINDS_WITH_FORCED_NONE_THINKING = new Set<RequestKind>([
 	'todo-tracker',
@@ -89,6 +94,15 @@ function classifyRequest(input: {
 }): RequestKind {
 	const firstText = input.firstText.trimStart();
 	const latestUserText = input.latestUserText.trimStart();
+	// 宿主摘要沿用主提示，必须先看完整的摘要请求边界，再判断普通聊天。
+	if (
+		latestUserText.startsWith(HOST_SUMMARY_PREFIX) &&
+		latestUserText.includes(
+			'IMPORTANT: Output your summary wrapped in <summary> and </summary> tags.',
+		) &&
+		latestUserText.trimEnd().endsWith(HOST_SUMMARY_SUFFIX)
+	)
+		return 'host-summary';
 	if (TERMINAL_NOTIFICATION_PATTERN.test(latestUserText)) {
 		return 'terminal-steering';
 	}
