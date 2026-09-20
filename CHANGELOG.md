@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.0.21 (2026-09-20)
+
+- Preserve historical message additions across a VS Code window reload when the host supplies user content as text parts. Restore saved pin locations using the same text extraction used to create them, and persist newly assigned locations after the append succeeds.
+- Keep edited messages from inheriting stale pin locations. Conversation identity and existing prefix recovery rules remain unchanged.
+
 ## 0.0.20 (2026-09-20)
 
 - Recognize host conversation-summary requests separately from ordinary Agent turns. Preserve their historical reasoning by replaying a verified request snapshot from the same conversation, model, endpoint, and account.
