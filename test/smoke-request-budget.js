@@ -65,7 +65,7 @@ test('确定幂等、冻结对象可检查且字节不变',()=>{
  const before=JSON.stringify(r);assert.deepEqual(assess(r),assess(r));assert.equal(JSON.stringify(r),before);
 });
 test('显式绑定模型预算、抛错有机器可读 code',()=>{
- assess(req());assert.deepEqual(budget.DEFAULT_BUDGET_POLICY,{maxInputTokens:655360,maxContextTokens:1048576,maxOutputTokens:393216,imageTokens:16384});
+ assess(req());assert.deepEqual(budget.DEFAULT_BUDGET_POLICY,{maxInputTokens:655360,maxContextTokens:1048576,maxOutputTokens:393216,imageTokens:4096});
  assert.equal(budget.assessRequestBudget(req()).maxInputTokens,655360);
  assert.throws(()=>budget.assertRequestBudget(req('x'.repeat(8000)),policy),{code:'request-budget-exceeded'});
 });
@@ -140,6 +140,12 @@ test('A3 真超大中文请求仍 input-limit',()=>{
  assert.equal(a.ok,false);
  assert.equal(a.reason,'input-limit');
 });
-test('A4 图片预留与默认限额不动',()=>{
- assert.deepEqual(budget.DEFAULT_BUDGET_POLICY,{maxInputTokens:655360,maxContextTokens:1048576,maxOutputTokens:393216,imageTokens:16384});
+test('A4 29 张历史截图不会单凭固定预留触发误杀',()=>{
+ assert.deepEqual(budget.DEFAULT_BUDGET_POLICY,{maxInputTokens:655360,maxContextTokens:1048576,maxOutputTokens:393216,imageTokens:4096});
+ const r=req('中'.repeat(120000));
+ r.messages=Array.from({length:29},()=>({role:'tool',content:[{type:'image_url',image_url:{url:'data:image/png;base64,'+'a'.repeat(1000)}}]}));
+ r.messages.push({role:'user',content:'中'.repeat(120000)});
+ const a=assess(r,budget.DEFAULT_BUDGET_POLICY);
+ assert.equal(a.imageCount,29);
+ assert.equal(a.ok,true);
 });

@@ -204,12 +204,14 @@ export class DeepSeekChatProvider implements vscode.LanguageModelChatProvider {
 			getVisionDescriber: () => this.vision.get(),
 		}).catch((error) => {
 			recordRequestEvent(requestId, 'REQUEST_REJECTED', requestKind);
-			if (
-				['request-budget-exceeded', 'missing-request-budget', 'invalid-request-budget'].includes(
-					error?.code,
-				)
-			)
+			if (error?.code === 'request-budget-exceeded' && error.assessment) {
+				const a = error.assessment;
+				const limit = a.reason === 'output-limit' ? a.maxOutputTokens : a.reason === 'context-limit' ? a.maxContextTokens : a.maxInputTokens;
+				const used = a.reason === 'output-limit' ? a.outputTokens : a.reason === 'context-limit' ? a.estimatedInputTokens + a.outputTokens : a.estimatedInputTokens;
+				error.message = `${t('request.budgetRejected')} 估算 ${used}，上限 ${limit}，超出 ${used - limit}；图片 ${a.imageCount} 张按 ${a.imageTokens} 计入。`;
+			} else if (['missing-request-budget', 'invalid-request-budget'].includes(error?.code)) {
 				error.message = t('request.budgetRejected');
+			}
 			throw error;
 		});
 

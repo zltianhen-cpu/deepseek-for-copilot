@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.0.24 (2026-09-20)
+
+- Reuse the verified skill directory from the same conversation's ordinary request when preparing a host conversation summary. Match the original first message and conversation scope before applying the already-filtered text.
+- Preserve the remaining history and summary replay behavior. Keep the original request when no matching in-memory snapshot exists, including immediately after a window reload.
+- Add regression coverage for conversation isolation, string and text-part messages, changed instructions, and conservative fallback behavior.
+
+## 0.0.23 (2026-09-20)
+
+- Reduce the fixed image budget reserve from 16,384 to 4,096 tokens per image after a 29-screenshot conversation was blocked locally despite a successful nearby API request. Keep the input and output limits, original messages, and final HTTP budget check.
+- Include the estimated usage, limit, overage, and image count in budget rejection errors. Add a regression test for a conversation with 29 screenshots.
+
 ## 0.0.22 (2026-09-20)
 
 - Keep the host’s complete conversation-summary history intact when the normal Agent request was folded. Verified replay now restores missing reasoning only; it never substitutes the shorter Agent payload for the host’s 329-message summary input.

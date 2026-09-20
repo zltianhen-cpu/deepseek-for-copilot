@@ -33,7 +33,7 @@ import {
 	type RequestKind,
 } from './routing';
 import type { ConversationSegment } from './segment';
-import { applyMessageFilter, logMessageComposition, workspaceIdentity } from './chat-hooks';
+import { applyHostSummarySkills, applyMessageFilter, logMessageComposition, workspaceIdentity } from './chat-hooks';
 import type { MessageFilterContext } from './chat-hooks';
 import {
 	assessRequestBudget,
@@ -208,6 +208,7 @@ export async function prepareChatRequest({
 		try {
 			const filterContext: MessageFilterContext = {
 				requestId,
+				hostSummaryKey: replayScope,
 				segment,
 				model: apiModel,
 				tools,
@@ -238,6 +239,7 @@ export async function prepareChatRequest({
 				const replay = await hostSummaryReplay.recover(replayScope, deepseekMessages, token);
 				if (replay.messages)
 					deepseekMessages.splice(0, deepseekMessages.length, ...replay.messages);
+				applyHostSummarySkills(deepseekMessages, filterContext);
 				recordRequestEvent(
 					requestId,
 					`HOST_SUMMARY_REPLAY_${replay.status.toUpperCase()}`,

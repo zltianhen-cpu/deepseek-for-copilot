@@ -35,6 +35,7 @@ import vscode from 'vscode';
 import { logger } from '../logger';
 import type { DeepSeekMessage } from '../types';
 import { countMessageChars } from './convert';
+import { applyRememberedSkills, rememberFilteredSkills } from './host-summary-skills';
 
 // ---- 路径解析（包内相对定位，不写任何绝对路径）----
 
@@ -66,6 +67,8 @@ export const REAL_TURN_KIND = 'main-agent';
 /** 出门前折叠用的会话钥匙。空串 = 钩子退回 fp:首条 user。 */
 export interface MessageFilterContext {
 	requestId?: string;
+	/** 宿主会话的严格身份；仅用于同链技能区复用，不参与折叠钥匙。 */
+	hostSummaryKey?: string;
 	workspaceId?: string;
 	runtime?: { extensionVersion: string; reportStep?: (payload: unknown) => void };
 	/** 扩展侧变化清单回调：applyMessageFilter 会把它转发进 runtime.reportStep（2026-09-19）。 */
@@ -248,6 +251,9 @@ export async function applyMessageFilter(
 		const beforeChars = safeCountMessageChars(messages);
 		const beforeCount = messages.length;
 		const sessionKey = foldSessionKey(ctx);
+		const originalSystem = messages[0] && typeof messages[0] === 'object'
+			? structuredClone(messages[0])
+			: messages[0];
 		const filterModule = getFilterModule();
 		const runFilter = filterModule?.filterOpenAIMessagesQueued;
 		if (!runFilter) {
@@ -269,6 +275,7 @@ export async function applyMessageFilter(
 		if (out && typeof (out as Promise<unknown>).then === 'function') {
 			await out;
 		}
+		rememberFilteredSkills(ctx?.hostSummaryKey ?? '', [originalSystem], messages);
 
 		// 只观察前后体积；不向无会话身份的宿主计数发布折扣。
 		// 宿主数的是未折叠的原文，折叠/筛选省下的量它看不见 → 它会在原文很大时就
@@ -289,6 +296,16 @@ export async function applyMessageFilter(
 	} catch {
 		// 钩子异常 → 比值清零，退回「技能目录折减」口径（宁可多算，不冒撞上限的险）
 		/* HOOK: never break chat */
+	}
+}
+
+/** 宿主压缩请求只复用已核验的技能区，不进入折叠、剪枝或历史恢复。 */
+export function applyHostSummarySkills(messages: unknown[], ctx?: MessageFilterContext): boolean {
+	if (!HOOKS_ENABLED) return false;
+	try {
+		return applyRememberedSkills(ctx?.hostSummaryKey ?? '', messages);
+	} catch {
+		return false;
 	}
 }
 

@@ -13,7 +13,7 @@ export const DEFAULT_BUDGET_POLICY: Readonly<RequestBudgetPolicy> = Object.freez
 	maxInputTokens: 655_360,
 	maxContextTokens: 1_048_576,
 	maxOutputTokens: 393_216,
-	imageTokens: 16_384,
+	imageTokens: 4_096,
 });
 
 export interface RequestBudgetAssessment {
