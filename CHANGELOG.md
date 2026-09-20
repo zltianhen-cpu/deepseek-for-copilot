@@ -1,7 +1,13 @@
 # Changelog
 
+## 0.0.19 (2026-09-20)
+
+- Keep the Mermaid diagram tool available from the first Agent request. Normalize its definition when the host omits it mid-conversation, and render its diagram in chat without relying on the host's tool enablement state.
+
 ## 0.0.18 (2026-09-18)
 
+- Estimate request budget with weighted CJK tokens (not UTF-8 bytes) plus a 1.25 safety factor. Fold commit/restore now keeps a strictly smaller projection even when it is still over budget.
+- Treat the recovery archive as a bounded cache: when it is full, evict the oldest unreferenced snapshots (referenced ones are never removed; fresh files keep a 10-minute grace window) instead of failing the fold; if archiving still fails, commit the fold anyway with the recovery reference cleared, and surface an 80% capacity warning. Previously a full archive silently discarded every fold and left oversized requests blocked.
 - Validate complete main and summary requests at the HTTP boundary without trimming messages; include tools, output reserve and configured model limits.
 - Split oversized summaries into bounded, atomic tool groups. Preserve host instructions and the latest user task with its complete tool loop. Retain recoverable originals before committing or restoring a folded history.
 - Disable process-wide compression discounts in host token counting and restore the built-in input capacity to the installed baseline.

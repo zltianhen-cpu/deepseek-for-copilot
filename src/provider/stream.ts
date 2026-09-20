@@ -249,6 +249,26 @@ function handleToolCall(
 	state: ResponseStreamState,
 	progress: vscode.Progress<vscode.LanguageModelResponsePart>,
 ): void {
+	if (toolCall.function.name === 'renderMermaidDiagram') {
+		// 宿主未列出该工具时会拒绝执行（即使注册表里有）。直接交给
+		// VS Code 的 Mermaid 代码块渲染器，避免出现「模型能选、宿主不能调」。
+		try {
+			const args: unknown = JSON.parse(toolCall.function.arguments);
+			const markup =
+				args && typeof args === 'object' && 'markup' in args
+					? (args as { markup: unknown }).markup
+					: undefined;
+			if (typeof markup !== 'string' || !markup.trim()) {
+				throw new Error('missing markup');
+			}
+			const runs = [...markup.matchAll(/`+/g)].map((match) => match[0].length);
+			const fence = '`'.repeat(Math.max(3, ...runs.map((length) => length + 1)));
+			progress.report(new vscode.LanguageModelTextPart(`\n${fence}mermaid\n${markup}\n${fence}\n`));
+		} catch {
+			progress.report(new vscode.LanguageModelTextPart('\nMermaid 图未生成：图形内容无效。\n'));
+		}
+		return;
+	}
 	state.emittedToolCallIds.push(toolCall.id);
 
 	try {

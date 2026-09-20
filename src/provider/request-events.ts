@@ -11,6 +11,33 @@ function eventLog() {
 		),
 	);
 }
+
+/** 过程类事件：只在非 minimal 档写（B4，2026-09-19）。警告/失败类永远写。 */
+const PROCESS_EVENT_CODES = new Set([
+	'PREPARE',
+	'PROVIDER_INPUT',
+	'PROVIDER_INPUT_ITEMS',
+	'CONVERTED',
+	'CONVERTED_ITEMS',
+	'FILTERED_CANDIDATE',
+	'FILTERED_CANDIDATE_ITEMS',
+	'WIRE_CANDIDATE',
+	'SEND_ATTEMPT',
+	'HTTP_ACCEPTED',
+	'USAGE_OBSERVED',
+	'REQUEST_CHANGESET',
+]);
+
+let diagnosticsMode = process.env.DEEPSEEK_DEBUG_MODE ?? 'unknown';
+
+/** 由扩展激活/配置变更时同步；'unknown' 时按现状写（不改变默认行为）。 */
+export function setDiagnosticsMode(mode: string): void {
+	diagnosticsMode = typeof mode === 'string' && mode ? mode : 'unknown';
+}
+
+export function getDiagnosticsMode(): string {
+	return diagnosticsMode;
+}
 export function newRequestId(): string {
 	try {
 		return eventLog().createRequestId();
@@ -60,8 +87,45 @@ function safeDetails(details?: Record<string, unknown>): Record<string, unknown>
 		out.fingerprints = details.fingerprints
 			.filter((v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))
 			.slice(0, 20);
+	if (Array.isArray(details?.changesetSteps)) {
+		out.changesetSteps = (details.changesetSteps as unknown[])
+			.filter((step): step is Record<string, unknown> => !!step && typeof step === 'object')
+			.slice(0, 20)
+			.map(safeChangesetStep);
+		const total = details?.changesetStepsTotal;
+		if (typeof total === 'number' && Number.isSafeInteger(total) && total >= 0)
+			out.changesetStepsTotal = Math.min(total, 1_000_000);
+		const kept = details?.changesetStepsKept;
+		if (typeof kept === 'number' && Number.isSafeInteger(kept) && kept >= 0)
+			out.changesetStepsKept = Math.min(kept, 1_000_000);
+		if (details?.changesetTrimmed === true) out.changesetTrimmed = true;
+	}
 	return out;
 }
+
+/** 变化清单步（平铺一层原始值——事件日志 maxDepth=3）：只放行计数/索引/摘要哈希。 */
+function safeChangesetStep(step: Record<string, unknown>): Record<string, unknown> {
+	const out: Record<string, unknown> = {};
+	const name = typeof step.name === 'string' ? step.name.slice(0, 32) : '';
+	if (!name || !/^[a-zA-Z0-9_.:-]{1,32}$/.test(name)) return out;
+	out.name = name;
+	for (const key of ['bItems', 'bChars', 'aItems', 'aChars', 'rmCount', 'rmChars', 'adCount', 'adChars', 'chCount']) {
+		const value = step[key];
+		if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) out[key] = value;
+	}
+	for (const key of ['bDigest', 'aDigest']) {
+		const value = step[key];
+		if (typeof value === 'string' && /^[a-f0-9]{32}$/.test(value)) out[key] = value;
+	}
+	for (const key of ['rmIdx', 'adIdx', 'chIdx']) {
+		const value = step[key];
+		if (typeof value === 'string' && value.length <= 96 && /^[0-9]+(,[0-9]+)*$/.test(value)) out[key] = value;
+	}
+	if (typeof step.note === 'string' && step.note && /^[a-zA-Z0-9_=;.:-]{1,120}$/.test(step.note.replace(/[\r\n]+/g, ' ')))
+		out.note = step.note.replace(/[\r\n]+/g, ' ').slice(0, 120);
+	return out;
+}
+
 export function recordRequestEvent(
 	requestId: string,
 	eventCode: string,
@@ -72,6 +136,7 @@ export function recordRequestEvent(
 ): void {
 	try {
 		if (process.env.DEEPSEEK_HOOKS_OFF === '1') return;
+		if (diagnosticsMode === 'minimal' && PROCESS_EVENT_CODES.has(eventCode)) return;
 		eventLog().reportEvent({
 			...provenance(),
 			...safeUsage(usage),

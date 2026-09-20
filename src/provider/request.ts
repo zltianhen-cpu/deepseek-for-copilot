@@ -2,15 +2,17 @@ import vscode from 'vscode';
 import { createHash } from 'node:crypto';
 import { bindRequestTrace, recordStage } from '../send-receipt';
 import { newRequestId, recordRequestEvent } from './request-events';
+import { createChangesetCollector } from './request-changeset';
 import { AuthManager } from '../auth';
 import { DeepSeekClient } from '../client';
-import { getApiModelId, getBaseUrl, getMaxTokens } from '../config';
+import { getApiModelId, getBaseUrl, getDebugMode, getMaxTokens, getRequestDumpEnabled } from '../config';
 import { isOfficialDeepSeekBaseUrl } from '../endpoint';
 import { getAllModels } from './custom-models';
 import { t } from '../i18n';
 import type { DeepSeekRequest } from '../types';
 import { buildSourceSidecar, convertMessages, countMessageChars } from './convert';
 import {
+	dumpConvertedSnapshot,
 	dumpDeepSeekRequest,
 	type CacheDiagnosticsRecorder,
 	type CacheDiagnosticsRun,
@@ -25,6 +27,7 @@ import {
 } from './routing';
 import type { ConversationSegment } from './segment';
 import { applyMessageFilter, logMessageComposition } from './chat-hooks';
+import type { MessageFilterContext } from './chat-hooks';
 import {
 	assessRequestBudget,
 	assertRequestBudget,
@@ -135,6 +138,16 @@ export async function prepareChatRequest({
 			.digest('hex'),
 	};
 	recordStage(trace, 'CONVERTED', deepseekMessages, tools);
+	// G1（2026-09-19）：钩子动手之前的内容快照（只有 verbose 档写）——用来对账
+	// 「钩子五步到底把哪些消息改成了什么」。指纹不够用时先看它。
+	dumpConvertedSnapshot({
+		requestId,
+		globalStorageUri,
+		segment,
+		requestKind: initialKind,
+		messages: deepseekMessages,
+		tools,
+	});
 	// 本扩展内建钩子（顺序不可颠倒：第二个要看到第一个处理后的结果）
 	// 折叠落盘钥匙在 chat-hooks 里拼：工作区|segmentId|模型。sid 不进钥匙。
 	const apiModel = getApiModelId(modelInfo.id);
@@ -153,12 +166,25 @@ export async function prepareChatRequest({
 		convertMessages(systemPrefix, isThinkingModel, nativeImageInput).length,
 	);
 	const filterAbort = new AbortController();
+	// G2/G3（2026-09-19）：钩子五步的变化指纹 → 一条 REQUEST_CHANGESET。
+	// 开关：verbose 档自动开；其他档要开就设 DEEPSEEK_CHANGESET=1。
+	// ⛔ 关闭时必须传 undefined（不是空函数）：钩子只看 typeof === 'function'，
+	// 传空函数会让钩子白算 10 次全量快照（独立审查 MAJOR-1，2026-09-19）。
+	// minimal 档不收集：就算设了 DEEPSEEK_CHANGESET=1，事件也会被档位门丢掉（复审 MINOR-1）。
+	const changesetEnabled =
+		getRequestDumpEnabled() ||
+		(process.env.DEEPSEEK_CHANGESET === '1' && getDebugMode() !== 'minimal');
+	const changeset = createChangesetCollector({
+		requestId,
+		requestKind: initialKind,
+		enabled: changesetEnabled,
+	});
 	const filterCancel =
 		token && typeof token.onCancellationRequested === 'function'
 			? token.onCancellationRequested(() => filterAbort.abort())
 			: { dispose() {} };
 	try {
-		await applyMessageFilter(deepseekMessages, {
+		const filterContext: MessageFilterContext = {
 			requestId,
 			segment,
 			model: apiModel,
@@ -184,11 +210,14 @@ export async function prepareChatRequest({
 				).ok,
 			sourceSidecar,
 			hostMessageChars,
-		});
+			reportStep: changesetEnabled ? changeset.reportStep : undefined,
+		};
+		await applyMessageFilter(deepseekMessages, filterContext);
 	} finally {
 		filterCancel.dispose();
 	}
 	recordStage(trace, 'FILTERED_CANDIDATE', deepseekMessages, tools);
+	changeset.finish();
 	logMessageComposition(deepseekMessages, tools);
 	finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 

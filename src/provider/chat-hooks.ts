@@ -67,7 +67,9 @@ export const REAL_TURN_KIND = 'main-agent';
 export interface MessageFilterContext {
 	requestId?: string;
 	workspaceId?: string;
-	runtime?: { extensionVersion: string };
+	runtime?: { extensionVersion: string; reportStep?: (payload: unknown) => void };
+	/** 扩展侧变化清单回调：applyMessageFilter 会把它转发进 runtime.reportStep（2026-09-19）。 */
+	reportStep?: (payload: unknown) => void;
 	signal?: AbortSignal;
 	/** 来自 convert 阶段的来源侧车厢数据，用于区分 user-host 与 unproven。 */
 	sourceSidecar?: unknown;
@@ -255,7 +257,7 @@ export async function applyMessageFilter(
 			sessionKey,
 			requestId: ctx?.requestId,
 			workspaceId: ctx?.workspaceId ?? workspaceIdentity(),
-			runtime: { extensionVersion: EXTENSION_VERSION },
+			runtime: { extensionVersion: EXTENSION_VERSION, reportStep: ctx?.reportStep },
 			signal: ctx?.signal,
 			storePath: ctx?.storePath,
 			summarize: ctx?.summarize,

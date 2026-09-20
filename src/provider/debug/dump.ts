@@ -23,6 +23,7 @@ import type { VisionProxySource, VisionResolutionStats } from '../vision';
 
 let dumpCounter = 0;
 let providerInputDumpCounter = 0;
+let convertedDumpCounter = 0;
 let dumpWriteQueue: Promise<void> = Promise.resolve();
 
 const REQUEST_OBSERVATIONS_FILE = '_request-observations.jsonl';
@@ -252,6 +253,63 @@ export async function ensureRequestDumpRoot(globalStorageUri: vscode.Uri): Promi
 	const root = getRequestDumpBaseRootUri(globalStorageUri);
 	await mkdir(root.fsPath, { recursive: true });
 	return root;
+}
+
+export interface DumpConvertedSnapshotOptions {
+	requestId: string;
+	globalStorageUri: vscode.Uri;
+	segment: ConversationSegment;
+	requestKind: RequestKind;
+	messages: unknown[];
+	tools?: unknown;
+}
+
+/**
+ * convert 之后、钩子动手之前的内容快照（G1，2026-09-19）。
+ * 只有 verbose 档写；写的是 DeepSeek 格式逐条全文——用于「钩子到底把什么改成了什么」对账。
+ */
+export function dumpConvertedSnapshot(options: DumpConvertedSnapshotOptions): void {
+	if (!getRequestDumpEnabled()) return;
+	const context = createDumpContext(
+		options.globalStorageUri,
+		options.segment,
+		'deepseek-converted',
+		(convertedDumpCounter += 1),
+		options.requestKind,
+	);
+	const file = join(context.root, `${context.basename}.json`);
+	// ⛔ 必须在这里同步冻死正文：钩子紧接着原地改写同一批消息对象（assignContent / length=0+push），
+	// 异步写回调里再 stringify 会落成「钩子之后」的形态（独立审查 BLOCKER-2，2026-09-19 实测）。
+	let payloadJson: string;
+	try {
+		let chars = 0;
+		const messages = options.messages.map((message) => {
+			try {
+				const text = safeStringify(message);
+				chars += text.length;
+				return JSON.parse(text) as unknown;
+			} catch {
+				return { unserializable: true };
+			}
+		});
+		payloadJson = safeStringify({
+			schemaVersion: 1,
+			stage: 'converted',
+			requestId: options.requestId,
+			requestKind: options.requestKind,
+			at: new Date().toISOString(),
+			itemCount: options.messages.length,
+			chars,
+			messages,
+			tools: options.tools ?? null,
+		});
+	} catch {
+		return; // 冻结失败宁可不写：半份快照比没有更误导。
+	}
+	enqueueDumpWrite('convertedDump', async () => {
+		await mkdir(context.root, { recursive: true });
+		await writeFile(file, payloadJson, 'utf-8');
+	});
 }
 
 function createDumpContext(

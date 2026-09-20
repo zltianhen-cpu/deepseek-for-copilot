@@ -1,4 +1,4 @@
-/** 用途：纯只读请求预算；按 UTF-8 字节保守估算，绝不删改请求或声称官方精确计数。 */
+/** 用途：纯只读请求预算；按字符加权保守估算（CJK≈1、其余÷4、乘安全系数），绝不删改请求或声称官方精确计数。 */
 import { safeStringify } from './json';
 import type { DeepSeekRequest } from './types';
 
@@ -30,7 +30,7 @@ export interface RequestBudgetAssessment {
 	imageTokens: number;
 	imageCount: number;
 	structureTokens: number;
-	estimateMethod: 'utf8-bytes-conservative-heuristic';
+	estimateMethod: 'weighted-cjk-safety-v1';
 	isOfficialTokenCount: false;
 }
 
@@ -73,11 +73,20 @@ export function getRequestBudgetPolicy(request: object): Readonly<RequestBudgetP
 	return policy;
 }
 
-function byteEstimate(value: unknown): number {
-	return Buffer.byteLength(safeStringify(value), 'utf8');
+const CJK_RE = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/g;
+const TOKEN_SAFETY = 1.25;
+
+function weightOf(text: string): number {
+	if (!text) return 0;
+	const cjk = (text.match(CJK_RE) || []).length;
+	return cjk + (text.length - cjk) / 4;
 }
 
-/** 每字节计一个 token，加结构余量；图片按策略预留，非官方图片 token 上界。 */
+function byteEstimate(value: unknown): number {
+	return Math.ceil(weightOf(safeStringify(value)) * TOKEN_SAFETY);
+}
+
+/** 按字符加权计 token，加结构余量；图片按策略预留，非官方图片 token 上界。 */
 export function assessRequestBudget(
 	request: DeepSeekRequest,
 	policy: RequestBudgetPolicy = getRequestBudgetPolicy(request),
@@ -128,7 +137,7 @@ export function assessRequestBudget(
 		imageTokens,
 		imageCount,
 		structureTokens,
-		estimateMethod: 'utf8-bytes-conservative-heuristic',
+		estimateMethod: 'weighted-cjk-safety-v1',
 		isOfficialTokenCount: false,
 	};
 }
