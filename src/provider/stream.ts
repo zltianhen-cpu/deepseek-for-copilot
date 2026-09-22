@@ -1,3 +1,4 @@
+import { createSessionTextStream } from './session-paths';
 import vscode from 'vscode';
 import { createUserFacingError } from '../client';
 import { logger } from '../logger';
@@ -49,6 +50,17 @@ export function streamChatCompletion({
 		replayMarkerReported: false,
 	};
 	const cancelListener = observeCancellationToken(token, prepared.cacheDiagnostics);
+	const restoreText = prepared.restoreSessionText ?? ((text: string) => text);
+	const contentStream = createSessionTextStream(restoreText, (text) =>
+		progress.report(new vscode.LanguageModelTextPart(text)),
+	);
+	const thinkingStream = createSessionTextStream(restoreText, (text) =>
+		handleThinking(text, state, progress),
+	);
+	const flushText = () => {
+		thinkingStream.flush();
+		contentStream.flush();
+	};
 
 	return prepared.client
 		.streamChatCompletion(
@@ -56,17 +68,32 @@ export function streamChatCompletion({
 			{
 				onContent: (content: string) => {
 					reportInitialResponseNoticeOnce(progress, state, initialResponseNotice);
-					progress.report(new vscode.LanguageModelTextPart(content));
+					thinkingStream.flush();
+					contentStream.push(content);
 				},
 
 				onThinking: (text: string) => {
 					reportInitialResponseNoticeOnce(progress, state, initialResponseNotice);
-					handleThinking(text, state, progress);
+					contentStream.flush();
+					thinkingStream.push(text);
 				},
 
 				onToolCall: (toolCall: DeepSeekToolCall) => {
+					flushText();
 					reportInitialResponseNoticeOnce(progress, state, initialResponseNotice);
-					handleToolCall(toolCall, state, progress);
+					handleToolCall(
+						prepared.restoreSessionArguments
+							? {
+									...toolCall,
+									function: {
+										...toolCall.function,
+										arguments: prepared.restoreSessionArguments(toolCall.function.arguments),
+									},
+								}
+							: toolCall,
+						state,
+						progress,
+					);
 				},
 
 				onError: (error: Error) => {
@@ -74,6 +101,7 @@ export function streamChatCompletion({
 				},
 
 				onDone: () => {
+					flushText();
 					reportReplayMarkerOnce(prepared, progress, state, 'done');
 					finalizeReplayDiagnostics(
 						prepared.trailingToolResultIds,
@@ -114,6 +142,7 @@ export function streamChatCompletion({
 			token,
 		)
 		.then(undefined, (error) => {
+			flushText();
 			reportSkippedReplayMarkerIfNeeded(
 				prepared,
 				state,
@@ -123,6 +152,7 @@ export function streamChatCompletion({
 			throw error;
 		})
 		.then(() => {
+			flushText();
 			if (token.isCancellationRequested) {
 				reportSkippedReplayMarkerIfNeeded(prepared, state, 'cancelled');
 			}

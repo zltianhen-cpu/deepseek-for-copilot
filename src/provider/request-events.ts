@@ -14,6 +14,11 @@ function eventLog() {
 
 /** 过程类事件：只在非 minimal 档写（B4，2026-09-19）。警告/失败类永远写。 */
 const PROCESS_EVENT_CODES = new Set([
+	'SESSION_PATH_NORMALIZED',
+	'SESSION_PATH_DISTINCT',
+	'SESSION_PATH_FOREIGN',
+	'SESSION_PATH_COLLISION',
+	'SESSION_PATH_INVALID_ARGUMENTS',
 	'PREPARE',
 	'PROVIDER_INPUT',
 	'PROVIDER_INPUT_ITEMS',
@@ -109,7 +114,17 @@ function safeChangesetStep(step: Record<string, unknown>): Record<string, unknow
 	const name = typeof step.name === 'string' ? step.name.slice(0, 32) : '';
 	if (!name || !/^[a-zA-Z0-9_.:-]{1,32}$/.test(name)) return out;
 	out.name = name;
-	for (const key of ['bItems', 'bChars', 'aItems', 'aChars', 'rmCount', 'rmChars', 'adCount', 'adChars', 'chCount']) {
+	for (const key of [
+		'bItems',
+		'bChars',
+		'aItems',
+		'aChars',
+		'rmCount',
+		'rmChars',
+		'adCount',
+		'adChars',
+		'chCount',
+	]) {
 		const value = step[key];
 		if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) out[key] = value;
 	}
@@ -119,9 +134,14 @@ function safeChangesetStep(step: Record<string, unknown>): Record<string, unknow
 	}
 	for (const key of ['rmIdx', 'adIdx', 'chIdx']) {
 		const value = step[key];
-		if (typeof value === 'string' && value.length <= 96 && /^[0-9]+(,[0-9]+)*$/.test(value)) out[key] = value;
+		if (typeof value === 'string' && value.length <= 96 && /^[0-9]+(,[0-9]+)*$/.test(value))
+			out[key] = value;
 	}
-	if (typeof step.note === 'string' && step.note && /^[a-zA-Z0-9_=;.:-]{1,120}$/.test(step.note.replace(/[\r\n]+/g, ' ')))
+	if (
+		typeof step.note === 'string' &&
+		step.note &&
+		/^[a-zA-Z0-9_=;.:-]{1,120}$/.test(step.note.replace(/[\r\n]+/g, ' '))
+	)
 		out.note = step.note.replace(/[\r\n]+/g, ' ').slice(0, 120);
 	return out;
 }
@@ -250,6 +270,7 @@ export function readErrorSummary(filter: ErrorSummaryFilter = {}): ErrorSummaryR
 							if (typeof r[key] === 'string' && /^[a-zA-Z0-9_.-]{1,100}$/.test(r[key]))
 								safe[key] = r[key];
 						}
+						if (Number.isSafeInteger(r.itemCount) && r.itemCount >= 0) safe.itemCount = r.itemCount;
 						result.rows.push(safe);
 					} catch {
 						result.badLines++;

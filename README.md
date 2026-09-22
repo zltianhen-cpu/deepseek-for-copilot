@@ -70,6 +70,8 @@ You can also install it from the command line:
 code --install-extension zltianhen.deepseek-for-copilot
 ```
 
+After installing or upgrading a local VSIX, run **Developer: Reload Window** so VS Code reloads the bundled request hooks.
+
 ### Usage
 
 1. Run **DeepSeek Cache-Aware: Set API Key** from the Command Palette (`Cmd+Shift+P`)

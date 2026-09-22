@@ -1,3 +1,4 @@
+import { normalizeSessionPaths } from './session-paths';
 import vscode from 'vscode';
 import { createHash } from 'node:crypto';
 import { bindRequestTrace, recordStage } from '../send-receipt';
@@ -33,7 +34,12 @@ import {
 	type RequestKind,
 } from './routing';
 import type { ConversationSegment } from './segment';
-import { applyHostSummarySkills, applyMessageFilter, logMessageComposition, workspaceIdentity } from './chat-hooks';
+import {
+	applyHostSummarySkills,
+	applyMessageFilter,
+	logMessageComposition,
+	workspaceIdentity,
+} from './chat-hooks';
 import type { MessageFilterContext } from './chat-hooks';
 import {
 	assessRequestBudget,
@@ -53,6 +59,8 @@ import {
 } from './vision';
 
 export interface PreparedChatRequest {
+	restoreSessionArguments?: (args: string) => string;
+	restoreSessionText?: (text: string) => string;
 	requestId: string;
 	client: DeepSeekClient;
 	request: DeepSeekRequest;
@@ -260,7 +268,19 @@ export async function prepareChatRequest({
 		logMessageComposition(deepseekMessages, tools);
 		finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 
-		const totalRequestChars = countMessageChars(deepseekMessages);
+		const outbound = normalizeSessionPaths(deepseekMessages);
+		// 本地只记计数，不把诊断数据和真实路径放进模型请求。
+		for (const [eventCode, itemCount] of [
+			['SESSION_PATH_NORMALIZED', outbound.stats.normalizedPaths],
+			['SESSION_PATH_DISTINCT', outbound.stats.distinctPaths],
+			['SESSION_PATH_FOREIGN', outbound.stats.foreignAliases],
+			['SESSION_PATH_COLLISION', outbound.stats.collisionPaths],
+			['SESSION_PATH_INVALID_ARGUMENTS', outbound.stats.invalidToolArguments],
+		] as const) {
+			if (itemCount > 0)
+				recordRequestEvent(requestId, eventCode, initialKind, undefined, undefined, { itemCount });
+		}
+		const totalRequestChars = countMessageChars(outbound.messages);
 		const hasNativeImages =
 			visionResolution.stats.imageHandlingMode === 'native' &&
 			visionResolution.stats.input.forwardedImageParts +
@@ -268,7 +288,7 @@ export async function prepareChatRequest({
 				0;
 		const baseRequest: DeepSeekRequest = {
 			model: getApiModelId(modelInfo.id),
-			messages: deepseekMessages,
+			messages: outbound.messages,
 			stream: true,
 			tools,
 			tool_choice: tools && tools.length > 0 ? ('auto' as const) : undefined,
@@ -334,6 +354,8 @@ export async function prepareChatRequest({
 		});
 
 		return {
+			restoreSessionArguments: outbound.restoreArguments,
+			restoreSessionText: outbound.restoreText,
 			requestId,
 			client,
 			request,

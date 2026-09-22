@@ -175,6 +175,8 @@ export class DeepSeekClient {
 							pendingToolCalls.clear();
 						}
 					} catch (e) {
+						// 工具目标有歧义时必须向上报告，不能当作坏分片吞掉。
+						if (e instanceof Error && 'code' in e && e.code === 'SESSION_PATH_AMBIGUOUS') throw e;
 						logger.error('Failed to parse SSE chunk:', jsonStr.slice(0, 200), e);
 					}
 				}

@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.0.29
+
+- Restore the explicitly selected slash-command skill name next to VS Code's generic `#prompt:SKILL.md` reference before every early-return path.
+- Restrict explicit skill detection to real user attachment tags and exclude plugin-pinned skill regions, so example paths and historical pins cannot impersonate a user selection.
+- Keep the rewritten request deterministic and query-neutral, with regressions for low-block requests, arguments, idempotence, and prefix stability.
+
+## 0.0.28
+
+- Preserve the initial skill directory when the host sends it as a user message and a later message attaches the same skill. Keep the explicit attachment body as well.
+- Use the same directory-container detection for legacy selection recovery, including text-part messages with no system role.
+- Keep selection snapshots across authenticated saves and retain request-owned state through early returns and concurrent cache eviction.
+- Add regressions for real host message shapes, attachment boundaries, restart recovery, and snapshot provenance.
+
+## 0.0.27
+
+- Recover missing skill selection state from authenticated conversation snapshots before filtering; preserve original skill order and historical attachment locations.
+- Report local persistence failures, retry transient writes, and align lightweight state retention with its configured limit.
+- Keep session aliases stable when later messages quote an existing alias. Reject ambiguous tool targets explicitly without changing earlier request content.
+- Cover independent-process recovery, retention, fork equality, streaming restoration, and tool rejection in the actual request pipeline.
+
+## 0.0.26
+
+- Keep normalizing real session paths when messages contain placeholder text or foreign placeholder paths.
+- Reserve foreign alias names and use a deterministic alternative only for colliding paths; never restore foreign aliases to local directories.
+- Add request-local normalization counters and regressions for escaped tool arguments, streaming restoration, history appends, and the actual send/response pipeline.
+
+## 0.0.25
+
+- Normalize session directory identifiers at the outbound request boundary to share forked conversation prefixes.
+- Restore session paths in returned tool arguments using request-local mappings; preserve tool IDs, images, and original conversion snapshots.
+
 ## 0.0.24 (2026-09-20)
 
 - Reuse the verified skill directory from the same conversation's ordinary request when preparing a host conversation summary. Match the original first message and conversation scope before applying the already-filtered text.
