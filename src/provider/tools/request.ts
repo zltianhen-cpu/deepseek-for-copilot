@@ -17,7 +17,8 @@ const MERMAID_TOOL: DeepSeekTool = {
 			properties: {
 				markup: {
 					type: 'string',
-					description: 'The mermaid diagram markup to render as a Mermaid diagram. This should only be the markup of the diagram. Do not include a wrapping code block.',
+					description:
+						'The mermaid diagram markup to render as a Mermaid diagram. This should only be the markup of the diagram. Do not include a wrapping code block.',
 				},
 				title: {
 					type: 'string',

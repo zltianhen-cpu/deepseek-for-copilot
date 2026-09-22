@@ -251,9 +251,8 @@ export async function applyMessageFilter(
 		const beforeChars = safeCountMessageChars(messages);
 		const beforeCount = messages.length;
 		const sessionKey = foldSessionKey(ctx);
-		const originalSystem = messages[0] && typeof messages[0] === 'object'
-			? structuredClone(messages[0])
-			: messages[0];
+		const originalSystem =
+			messages[0] && typeof messages[0] === 'object' ? structuredClone(messages[0]) : messages[0];
 		const filterModule = getFilterModule();
 		const runFilter = filterModule?.filterOpenAIMessagesQueued;
 		if (!runFilter) {

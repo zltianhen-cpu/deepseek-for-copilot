@@ -34,8 +34,10 @@ function onlySkillsChanged(raw: string, filtered: string): boolean {
 	if (raw.indexOf(open, rawEnd + close.length) >= 0) return false;
 	if (filtered.indexOf(open, filteredEnd + close.length) >= 0) return false;
 	// 常规过滤器只会把技能区后的连续空行收成两行；允许同一确定性格式化。
-	return raw.slice(0, rawStart + open.length) === filtered.slice(0, filteredStart + open.length)
-		&& raw.slice(rawEnd).replace(/\n{3,}/g, '\n\n') === filtered.slice(filteredEnd);
+	return (
+		raw.slice(0, rawStart + open.length) === filtered.slice(0, filteredStart + open.length) &&
+		raw.slice(rawEnd).replace(/\n{3,}/g, '\n\n') === filtered.slice(filteredEnd)
+	);
 }
 
 export function rememberFilteredSkills(key: string, before: unknown[], after: unknown[]): boolean {
@@ -44,7 +46,8 @@ export function rememberFilteredSkills(key: string, before: unknown[], after: un
 	const filtered = firstText(after);
 	const role = (before[0] as Message | undefined)?.role;
 	if (role !== (after[0] as Message | undefined)?.role) return false;
-	if (raw === null || filtered === null || raw === filtered || !onlySkillsChanged(raw, filtered)) return false;
+	if (raw === null || filtered === null || raw === filtered || !onlySkillsChanged(raw, filtered))
+		return false;
 	snapshots.delete(key);
 	snapshots.set(key, { rawHash: hash(raw), role: role!, filtered });
 	if (snapshots.size > MAX_SNAPSHOTS) snapshots.delete(snapshots.keys().next().value!);
@@ -55,8 +58,13 @@ export function applyRememberedSkills(key: string, messages: unknown[]): boolean
 	if (!key) return false;
 	const raw = firstText(messages);
 	const snapshot = snapshots.get(key);
-	if (raw === null || !snapshot || (messages[0] as Message).role !== snapshot.role
-		|| hash(raw) !== snapshot.rawHash) return false;
+	if (
+		raw === null ||
+		!snapshot ||
+		(messages[0] as Message).role !== snapshot.role ||
+		hash(raw) !== snapshot.rawHash
+	)
+		return false;
 	if (!onlySkillsChanged(raw, snapshot.filtered)) return false;
 	const message = messages[0] as Message;
 	setFirstText(message, snapshot.filtered);

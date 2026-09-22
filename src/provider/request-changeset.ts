@@ -88,7 +88,8 @@ function shortNote(value: unknown): string {
 		if (parts.length >= 4) break;
 		if (!/^[a-zA-Z][a-zA-Z0-9_]{0,24}$/.test(key)) continue;
 		if (typeof item === 'boolean' || typeof item === 'number') parts.push(`${key}=${item}`);
-		else if (typeof item === 'string' && /^[a-zA-Z0-9_.:-]{1,40}$/.test(item)) parts.push(`${key}=${item}`);
+		else if (typeof item === 'string' && /^[a-zA-Z0-9_.:-]{1,40}$/.test(item))
+			parts.push(`${key}=${item}`);
 	}
 	return parts.join(';').slice(0, MAX_NOTE);
 }
@@ -106,7 +107,10 @@ function estimateBytes(steps: Record<string, unknown>[]): number {
  * 行预算：事件日志单行 ≤8KB，超了会降级成「只剩事件码」的残行（独立审查 MINOR-1 实测）。
  * 逐级瘦身：丢 note → 丢索引 → 从尾部砍步（保前几步，最先发生的剪枝/替换最有信息量）。
  */
-function budgetSteps(steps: Record<string, unknown>[]): { steps: Record<string, unknown>[]; trimmed: boolean } {
+function budgetSteps(steps: Record<string, unknown>[]): {
+	steps: Record<string, unknown>[];
+	trimmed: boolean;
+} {
 	const LIMIT = 6000; // 留 2KB 给公共字段与日志自身字段
 	let current = steps;
 	let trimmed = false;
