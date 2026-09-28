@@ -1,5 +1,6 @@
+import { normalizeSessionPaths } from './session-paths';
 import { newRequestId, recordRequestEvent } from './request-events';
-import { bindRequestTrace } from '../send-receipt';
+import { bindRequestTrace, recordStage } from '../send-receipt';
 import {
 	assessRequestBudget,
 	assertRequestBudget,
@@ -9,7 +10,7 @@ import {
 } from '../request-budget';
 import type { CancellationToken } from 'vscode';
 import type { DeepSeekClient } from '../client';
-import type { DeepSeekMessage, DeepSeekRequest, DeepSeekTool } from '../types';
+import type { DeepSeekMessage, DeepSeekRequest, DeepSeekTool, DeepSeekUsage } from '../types';
 
 /** 写简历最多等这么久；超时当没写成，正轮照发原文。 */
 export const FOLD_LLM_TIMEOUT_MS = 60000;
@@ -40,6 +41,14 @@ Problems hit and how they were resolved (or not), so the same dead ends are not 
 What is still in progress or unstarted, and the single most concrete next action to take.
 
 Rules: be terse — bullet points and fragments, not prose. Preserve identifiers, paths, and numbers exactly. Merge valid facts from any existing <compaction-summary> and remove facts superseded by later messages. Do NOT invent anything not present in the messages; if something is unknown, leave it out rather than guessing. Output only the structured Markdown briefing. Do not call tools. Do not output reasoning.`;
+
+// Local provenance only: never serialized into the API request.
+const summaryShapes = new WeakMap<DeepSeekRequest, string>();
+
+export type FoldSummaryMode = Pick<
+	DeepSeekRequest,
+	'thinking' | 'reasoning_effort' | 'tool_choice'
+>;
 
 export interface FoldSummarizeExtra {
 	protectedPrefixCount?: number;
@@ -87,6 +96,7 @@ export function buildFoldSummaryRequest(
 	foldMsgs: unknown[],
 	extra?: FoldSummarizeExtra,
 	fallbackTools?: unknown,
+	parentMode?: FoldSummaryMode,
 ): DeepSeekRequest {
 	const target = asMessages(foldMsgs);
 	const supplied = extra?.prefixMessages?.length ? asMessages(extra.prefixMessages) : undefined;
@@ -115,16 +125,25 @@ export function buildFoldSummaryRequest(
 			`\nSUMMARY_TARGET_RANGE=${actualStart}:${actualStart + target.length - 1} (zero-based inclusive message indexes). Summarize only this range. Do not summarize messages outside this range; they are context only.`
 		: COMPACTION_INSTRUCTION;
 	const tools = asTools(extra?.tools !== undefined ? extra.tools : fallbackTools);
-	return {
+	const request: DeepSeekRequest = {
 		model,
 		messages: [...asMessages(prefix), { role: 'user', content: instruction }],
 		stream: false,
-		temperature: 0,
-		thinking: { type: 'disabled' },
+		...(parentMode ?? { temperature: 0, thinking: { type: 'disabled' as const } }),
 		max_tokens: 4096,
 		tools,
-		tool_choice: tools && tools.length > 0 ? 'none' : undefined,
+		tool_choice:
+			tools && tools.length > 0 ? (parentMode ? parentMode.tool_choice : 'none') : undefined,
 	};
+	summaryShapes.set(
+		request,
+		supplied
+			? range !== undefined
+				? 'SUMMARY_PREFIX_FULL'
+				: 'SUMMARY_TARGET_UNMATCHED'
+			: 'SUMMARY_TARGET_ONLY',
+	);
+	return request;
 }
 
 /** 工具调用与全部对应回复不可分割；残缺或孤儿组本地拒绝。 */
@@ -163,6 +182,8 @@ export function makeFoldSummarize(
 	tools?: unknown,
 	parentRequestId?: string,
 	policy: RequestBudgetPolicy = DEFAULT_BUDGET_POLICY,
+	onUsage?: (usage: DeepSeekUsage, requestId: string) => void,
+	parentMode?: FoldSummaryMode,
 ) {
 	let attempt = 0;
 	const emptyDiagnostic = () => ({
@@ -171,6 +192,9 @@ export function makeFoldSummarize(
 		elapsedMs: 0,
 		requests: 0,
 		httpStatus: 0,
+		requestShape: 'not-sent',
+		diagnosticWriteStatus: 'not-attempted',
+		diagnosticWriteError: '',
 	});
 	const summarize = async (foldMsgs: unknown[], extra?: FoldSummarizeExtra) => {
 		const started = Date.now();
@@ -182,32 +206,64 @@ export function makeFoldSummarize(
 		const actualTools = extra?.tools !== undefined ? extra.tools : tools;
 		let fixed: DeepSeekMessage[] = [];
 		const build = (messages: DeepSeekMessage[]) =>
-			buildFoldSummaryRequest(model, messages, {
-				tools: actualTools,
-				...(fixed.length
-					? { prefixMessages: [...fixed, ...messages], protectedPrefixCount: fixed.length }
-					: {}),
-			});
+			buildFoldSummaryRequest(
+				model,
+				messages,
+				{
+					tools: actualTools,
+					...(fixed.length
+						? { prefixMessages: [...fixed, ...messages], protectedPrefixCount: fixed.length }
+						: {}),
+				},
+				undefined,
+				parentMode,
+			);
 		const fits = (request: DeepSeekRequest) => assessRequestBudget(request, policy).ok;
-		const send = async (base: DeepSeekRequest): Promise<string> => {
+		const send = async (base: DeepSeekRequest, budgetChunk = false): Promise<string> => {
 			for (const outputTokens of [4096, 8192]) {
 				checkActive();
 				if (summarize.lastDiagnostic.requests >= 12) throw summaryError('request-limit');
-				const request = bindRequestBudget({ ...base, max_tokens: outputTokens }, policy);
+				const outbound = normalizeSessionPaths(base.messages);
+				if (outbound.stats.collisionPaths > 0) throw summaryError('path-collision');
+				const request = bindRequestBudget(
+					{ ...base, messages: outbound.messages, max_tokens: outputTokens },
+					policy,
+				);
 				assertRequestBudget(request, policy);
 				const requestId = newRequestId();
 				summarize.lastDiagnostic.requests += 1;
 				bindRequestTrace(request, { requestId, requestKind: 'summary', parentRequestId });
 				recordRequestEvent(requestId, 'PREPARE', 'summary', parentRequestId);
+				const requestShape = budgetChunk
+					? 'SUMMARY_BUDGET_CHUNK'
+					: (summaryShapes.get(base) ?? 'SUMMARY_SHAPE_UNKNOWN');
+				summarize.lastDiagnostic.requestShape = requestShape;
+				recordRequestEvent(requestId, requestShape, 'summary', parentRequestId);
+				const diagnosticWrite = recordStage(
+					{ requestId, requestKind: 'summary', parentRequestId },
+					'SUMMARY_INPUT',
+					request.messages,
+					request.tools,
+				);
+				if (!diagnosticWrite.ok) {
+					summarize.lastDiagnostic.diagnosticWriteStatus = 'failed';
+					summarize.lastDiagnostic.diagnosticWriteError =
+						diagnosticWrite.error ?? 'diag-stage-failed';
+				} else if (summarize.lastDiagnostic.diagnosticWriteStatus !== 'failed') {
+					summarize.lastDiagnostic.diagnosticWriteStatus = diagnosticWrite.skipped
+						? 'skipped'
+						: 'written';
+				}
 				try {
 					const text = await client.completeChat(
 						request,
 						FOLD_LLM_TIMEOUT_MS - (Date.now() - started),
 						token,
+						(usage) => onUsage?.(usage, requestId),
 					);
 					checkActive();
 					if (typeof text !== 'string' || !text.trim()) throw summaryError('empty');
-					return text.trim();
+					return outbound.restoreText(text.trim());
 				} catch (error) {
 					checkActive();
 					if ((error as { code?: string })?.code === 'truncated' && outputTokens === 4096) continue;
@@ -218,7 +274,7 @@ export function makeFoldSummarize(
 		};
 		try {
 			checkActive();
-			const full = buildFoldSummaryRequest(model, foldMsgs, extra, tools);
+			const full = buildFoldSummaryRequest(model, foldMsgs, extra, tools, parentMode);
 			atomicGroups(full.messages);
 			if (fits(full)) {
 				const result = await send(full);
@@ -264,7 +320,7 @@ export function makeFoldSummarize(
 				if (requests.length + summarize.lastDiagnostic.requests > 12)
 					throw summaryError('request-limit');
 				const results: string[] = [];
-				for (const request of requests) results.push(await send(request));
+				for (const request of requests) results.push(await send(request, true));
 				return results;
 			};
 			const join = (parts: string[]) =>
@@ -295,6 +351,7 @@ export function makeFoldSummarize(
 			const allowed = [
 				'invalid-messages',
 				'mid-system',
+				'path-collision',
 				'truncated',
 				'invalid-finish',
 				'empty',

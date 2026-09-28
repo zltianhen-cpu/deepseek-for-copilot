@@ -15,6 +15,12 @@ assert.ok(fs.readFileSync(compiled, 'utf8').includes('skill_filter.js'),
   'compiled provider does not load skill_filter.js');
 assert.ok(fs.existsSync(filterPath), 'bundled skill_filter.js is missing');
 
+// The early-return fixture must not depend on the operator's private skill index.
+const os = require('node:os');
+const fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'slim-index-'));
+process.on('exit', () => fs.rmSync(fixtureDir, { recursive: true, force: true }));
+process.env.DEEPSEEK_INDEX_PATH = path.join(fixtureDir, 'index.json');
+fs.writeFileSync(process.env.DEEPSEEK_INDEX_PATH, JSON.stringify({ skills: [{name: 'sample-sync'}] }));
 const filter = require(filterPath);
 const raw = '<userRequest>\n'
   + '<attachment id="prompt:SKILL.md" filePath="/tmp/work/skills/sample-sync/SKILL.md">\n'

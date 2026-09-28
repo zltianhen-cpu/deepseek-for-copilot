@@ -1,3 +1,4 @@
+const { symlinkFixture } = require('../tools/test-symlink.cjs');
 // 用途：用临时惰性 ZIP 验证产物缺件必失败；不构建或部署真实扩展。
 const {test,after}=require('node:test');
 const assert=require('node:assert/strict');
@@ -11,6 +12,6 @@ test('complete synthetic archive accepted',()=>assert.equal(inspect('complete').
 test('shared manifest covers exact runtime set',async()=>{const m=await import('../tools/hook-manifest.mjs');assert.deepEqual([...m.HOOK_FILES].sort(),[...expected].sort());});
 test('validator rejects undeclared local dependency',async()=>{const m=await import('../tools/hook-manifest.mjs');const {hooks}=fixture('undeclared');fs.writeFileSync(path.join(hooks,'skill_filter.js'),"require('./new_helper');");assert.ok(m.validateHookDirectory(hooks).some(x=>x.includes('new_helper')));});
 test('validator rejects empty module',async()=>{const m=await import('../tools/hook-manifest.mjs');const {hooks}=fixture('empty');fs.writeFileSync(path.join(hooks,'event_log.js'),'');assert.ok(m.validateHookDirectory(hooks).some(x=>x.includes('event_log.js')));});
-test('validator rejects symlink module',async()=>{const m=await import('../tools/hook-manifest.mjs');const {hooks}=fixture('symlink');fs.unlinkSync(path.join(hooks,'event_log.js'));fs.symlinkSync('text_parts.js',path.join(hooks,'event_log.js'));assert.ok(m.validateHookDirectory(hooks).some(x=>x.includes('event_log.js')));});
+test('validator rejects symlink module',async()=>{const m=await import('../tools/hook-manifest.mjs');const {hooks}=fixture('symlink');fs.unlinkSync(path.join(hooks,'event_log.js'));symlinkFixture('text_parts.js',path.join(hooks,'event_log.js'));assert.ok(m.validateHookDirectory(hooks).some(x=>x.includes('event_log.js')));});
 
 for(const file of expected)test('build preflight rejects missing '+file,()=>{const {hooks}=fixture('preflight-'+file,file);const r=spawnSync(process.execPath,[path.join(root,'tools/build.mjs')],{encoding:'utf8',env:{...process.env,DEEPSEEK_HOOK_SRC:hooks}});assert.equal(r.status,1);assert.ok((r.stdout+r.stderr).includes(file));assert.ok(!r.stdout.includes('[2/5]'));});

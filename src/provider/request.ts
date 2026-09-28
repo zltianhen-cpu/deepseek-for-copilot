@@ -1,3 +1,9 @@
+import path from 'node:path';
+import {
+	SummaryDeliveryStore,
+	deliveryMode,
+	type LocalSummaryDelivery,
+} from './replay/summary-delivery';
 import { normalizeSessionPaths } from './session-paths';
 import vscode from 'vscode';
 import { createHash } from 'node:crypto';
@@ -38,6 +44,7 @@ import {
 	applyHostSummarySkills,
 	applyMessageFilter,
 	logMessageComposition,
+	logUsage,
 	workspaceIdentity,
 } from './chat-hooks';
 import type { MessageFilterContext } from './chat-hooks';
@@ -59,6 +66,7 @@ import {
 } from './vision';
 
 export interface PreparedChatRequest {
+	localDelivery?: LocalSummaryDelivery & { markSent: () => boolean };
 	restoreSessionArguments?: (args: string) => string;
 	restoreSessionText?: (text: string) => string;
 	requestId: string;
@@ -155,17 +163,50 @@ export async function prepareChatRequest({
 		baseUrl,
 		apiKey,
 	);
+	const mode = deliveryMode(process.env.DEEPSEEK_SUMMARY_DELIVERY);
+	const deliveryStore =
+		mode === 'off'
+			? undefined
+			: new SummaryDeliveryStore(
+					path.join(
+						process.env.DEEPSEEK_DATA_DIR || globalStorageUri.fsPath,
+						'summary-delivery-v1',
+					),
+					{ maxOutputBytes: Math.min(256 * 1024, maxTokens ?? budgetPolicy.maxOutputTokens) },
+				);
+	const originalHistory = deliveryStore
+		? (JSON.parse(JSON.stringify(deepseekMessages)) as DeepSeekRequest['messages'])
+		: undefined;
+	const generatedFolds: { region: DeepSeekRequest['messages']; summary: string }[] = [];
+	// Scope includes trusted conversation identity and model/tool shape. Any mismatch falls back.
+	const localDelivery =
+		!token?.isCancellationRequested && initialKind === 'host-summary'
+			? deliveryStore?.prepare(replayScope, deepseekMessages.slice(0, -1), mode, () =>
+					recordRequestEvent(requestId, 'LOCAL_SUMMARY_ELIGIBLE', initialKind),
+				)
+			: undefined;
+	const adoptedGeneration =
+		mode === 'passive_A' && !token?.isCancellationRequested && initialKind === 'main-agent'
+			? deliveryStore?.adoptGeneration(replayScope, deepseekMessages)
+			: undefined;
+	if (adoptedGeneration) recordRequestEvent(requestId, 'LOCAL_SUMMARY_ADOPTED', initialKind);
+	if (deliveryStore && initialKind === 'host-summary')
+		recordRequestEvent(
+			requestId,
+			localDelivery ? 'LOCAL_SUMMARY_PREPARED' : 'LOCAL_SUMMARY_FALLBACK',
+			initialKind,
+		);
 	const replayTicket =
 		initialKind === 'main-agent'
-			? hostSummaryReplay.begin(replayScope, deepseekMessages)
+			? hostSummaryReplay.begin(replayScope, deepseekMessages, requestId)
 			: undefined;
 	try {
 		const trace = {
 			requestId,
 			requestKind: initialKind,
-			sessionRef: createHash('sha256')
-				.update(segment.segmentId ?? 'unknown')
-				.digest('hex'),
+			sessionRef: segment.segmentId
+				? createHash('sha256').update(segment.segmentId).digest('hex')
+				: '',
 		};
 		recordStage(trace, 'CONVERTED', deepseekMessages, tools);
 		// G1（2026-09-19）：钩子动手之前的内容快照（只有 verbose 档写）——用来对账
@@ -217,11 +258,58 @@ export async function prepareChatRequest({
 			const filterContext: MessageFilterContext = {
 				requestId,
 				hostSummaryKey: replayScope,
+				sessionKey: adoptedGeneration,
+				managedHostSummary: !!adoptedGeneration,
+				catalogReplay: (change) => hostSummaryReplay.recordCatalog(replayTicket, change),
 				segment,
 				model: apiModel,
 				tools,
 				signal: filterAbort.signal,
-				summarize: makeFoldSummarize(client, apiModel, token, tools, requestId, budgetPolicy),
+				summarize: makeFoldSummarize(
+					client,
+					apiModel,
+					token,
+					tools,
+					requestId,
+					budgetPolicy,
+					(usage, summaryRequestId) =>
+						logUsage({
+							requestId: summaryRequestId,
+							parentRequestId: requestId,
+							sessionRef: trace.sessionRef,
+							prompt: usage.prompt_tokens,
+							cacheHit: usage.prompt_cache_hit_tokens ?? 0,
+							cacheMiss: usage.prompt_cache_miss_tokens,
+							completion: usage.completion_tokens,
+							reasoning: (
+								usage as typeof usage & {
+									completion_tokens_details?: { reasoning_tokens?: number };
+								}
+							).completion_tokens_details?.reasoning_tokens,
+							kind: 'fold-summary',
+							isRealTurn: false,
+							charsPerToken: 0,
+							model: apiModel,
+						}),
+					initialKind === 'main-agent' && isOfficialDeepSeekBaseUrl(baseUrl)
+						? {
+								...(isThinkingModel
+									? {
+											thinking: {
+												type:
+													configuredThinkingEffort === 'none'
+														? ('disabled' as const)
+														: ('enabled' as const),
+											},
+											...(configuredThinkingEffort === 'none'
+												? {}
+												: { reasoning_effort: configuredThinkingEffort }),
+										}
+									: {}),
+								tool_choice: tools?.length ? ('auto' as const) : undefined,
+							}
+						: undefined,
+				),
 				protectedPrefixCount,
 				fitsBudget: (candidate) =>
 					assessRequestBudget(
@@ -243,7 +331,24 @@ export async function prepareChatRequest({
 				hostMessageChars,
 				reportStep: changesetEnabled ? changeset.reportStep : undefined,
 			};
-			if (initialKind === 'host-summary') {
+			if (deliveryStore && filterContext.summarize) {
+				const generate = filterContext.summarize;
+				const certifiedGenerate: NonNullable<MessageFilterContext['summarize']> = async (
+					...args
+				) => {
+					const region = JSON.parse(JSON.stringify(args[0])) as DeepSeekRequest['messages'];
+					const summary = await generate(...args);
+					if (summary) generatedFolds.push({ region, summary });
+					return summary;
+				};
+				Object.defineProperty(certifiedGenerate, 'lastDiagnostic', {
+					get: () => (generate as typeof generate & { lastDiagnostic?: unknown }).lastDiagnostic,
+				});
+				filterContext.summarize = certifiedGenerate;
+			}
+			if (localDelivery) {
+				// Already certified against the unmodified converted history; do not mutate hook state.
+			} else if (initialKind === 'host-summary') {
 				const replay = await hostSummaryReplay.recover(replayScope, deepseekMessages, token);
 				if (replay.messages)
 					deepseekMessages.splice(0, deepseekMessages.length, ...replay.messages);
@@ -254,7 +359,13 @@ export async function prepareChatRequest({
 					initialKind,
 					undefined,
 					undefined,
-					{ itemCount: replay.restored },
+					{
+						itemCount: replay.restored,
+						reasoningRestoredCount: replay.restored,
+						catalogPatchCount: replay.catalogRestored ?? 0,
+						sourceRequestId: replay.sourceRequestId,
+						patchedMessageIndexes: replay.catalogIndexes,
+					},
 				);
 				// 无证据时保留宿主原文并让既有预算检查裁决；绝不改主聊天缓存。
 			} else {
@@ -265,7 +376,7 @@ export async function prepareChatRequest({
 		}
 		recordStage(trace, 'FILTERED_CANDIDATE', deepseekMessages, tools);
 		changeset.finish();
-		logMessageComposition(deepseekMessages, tools);
+		logMessageComposition(deepseekMessages, tools, trace);
 		finalizeVisionResolutionStats(visionResolution.stats, deepseekMessages);
 
 		const outbound = normalizeSessionPaths(deepseekMessages);
@@ -318,25 +429,36 @@ export async function prepareChatRequest({
 		};
 		bindRequestBudget(request, budgetPolicy);
 		bindRequestTrace(request, { ...trace, requestKind });
-		assertRequestBudget(request);
+		if (!localDelivery) assertRequestBudget(request);
+		if (!token?.isCancellationRequested && originalHistory && initialKind === 'main-agent') {
+			for (const fold of generatedFolds)
+				deliveryStore?.capture(
+					replayScope,
+					originalHistory,
+					fold.region,
+					fold.summary,
+					deepseekMessages,
+				);
+		}
 		if (!token?.isCancellationRequested) hostSummaryReplay.complete(replayTicket, deepseekMessages);
 		else hostSummaryReplay.fail(replayTicket);
-		dumpDeepSeekRequest(request, {
-			requestId,
-			globalStorageUri,
-			segment,
-			requestKind,
-			vscodeModelId: modelInfo.id,
-			isThinkingModel,
-			thinkingEffort,
-			maxTokens,
-			inputMessages: messages,
-			resolvedMessages,
-			requestOptions: options,
-			visionModelId: visionResolution.visionModelId,
-			visionProxySource: visionResolution.visionProxySource,
-			visionStats: visionResolution.stats,
-		});
+		if (!localDelivery)
+			dumpDeepSeekRequest(request, {
+				requestId,
+				globalStorageUri,
+				segment,
+				requestKind,
+				vscodeModelId: modelInfo.id,
+				isThinkingModel,
+				thinkingEffort,
+				maxTokens,
+				inputMessages: messages,
+				resolvedMessages,
+				requestOptions: options,
+				visionModelId: visionResolution.visionModelId,
+				visionProxySource: visionResolution.visionProxySource,
+				visionStats: visionResolution.stats,
+			});
 
 		const diagnosticsRun = cacheDiagnostics.beginRequest({
 			request,
@@ -354,6 +476,10 @@ export async function prepareChatRequest({
 		});
 
 		return {
+			localDelivery: localDelivery && {
+				...localDelivery,
+				markSent: () => deliveryStore!.markSent(localDelivery.id),
+			},
 			restoreSessionArguments: outbound.restoreArguments,
 			restoreSessionText: outbound.restoreText,
 			requestId,

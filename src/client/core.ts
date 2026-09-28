@@ -207,6 +207,7 @@ export class DeepSeekClient {
 		request: DeepSeekRequest,
 		timeoutMs: number,
 		cancellationToken?: CancellationToken,
+		onUsage?: (usage: DeepSeekUsage) => void,
 	): Promise<string> {
 		const receipt = createSendReceipt(request);
 		const controller = new AbortController();
@@ -238,12 +239,27 @@ export class DeepSeekClient {
 			receipt.accepted(response.status);
 			const data = (await response.json()) as {
 				usage?: DeepSeekUsage;
-				choices?: Array<{ finish_reason?: string; message?: { content?: unknown } }>;
+				choices?: Array<{
+					finish_reason?: string;
+					message?: { content?: unknown; tool_calls?: unknown; function_call?: unknown };
+				}>;
 			};
 			receipt.usage(data?.usage);
+			if (data?.usage && onUsage) {
+				try {
+					onUsage(data.usage);
+				} catch {
+					/* Observation must not affect delivery. */
+				}
+			}
 			const choice = data?.choices?.[0];
 			// 半截摘要不能替代完整历史；未明确完整结束也拒绝提交。
-			if (choice?.finish_reason !== 'stop') {
+			if (
+				choice?.finish_reason !== 'stop' ||
+				(choice.message?.tool_calls != null &&
+					(!Array.isArray(choice.message.tool_calls) || choice.message.tool_calls.length > 0)) ||
+				choice.message?.function_call != null
+			) {
 				throw Object.assign(new Error('Summary incomplete'), {
 					code: choice?.finish_reason === 'length' ? 'truncated' : 'invalid-finish',
 				});

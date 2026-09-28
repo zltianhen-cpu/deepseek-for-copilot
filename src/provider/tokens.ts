@@ -83,10 +83,13 @@ interface PartTokenEstimate {
 /**
  * Recursively estimate text chars and fixed token parts for a single content part.
  */
-function estimatePartTokens(part: unknown): PartTokenEstimate {
+function estimatePartTokens(part: unknown, rawText = false): PartTokenEstimate {
 	// 1. LanguageModelTextPart — the most common case（技能目录区按实发口径折减）
 	if (part instanceof vscode.LanguageModelTextPart) {
-		return { textChars: effectiveTextChars(part.value), fixedTokens: 0 };
+		return {
+			textChars: rawText ? part.value.length : effectiveTextChars(part.value),
+			fixedTokens: 0,
+		};
 	}
 
 	// 2. LanguageModelToolCallPart — count callId + name + JSON-serialized input
@@ -107,7 +110,7 @@ function estimatePartTokens(part: unknown): PartTokenEstimate {
 		let fixedTokens = 0;
 		if (Array.isArray(part.content)) {
 			for (const item of part.content) {
-				const nested = estimatePartTokens(item);
+				const nested = estimatePartTokens(item, rawText);
 				textChars += nested.textChars;
 				fixedTokens += nested.fixedTokens;
 			}
@@ -220,12 +223,11 @@ export function estimateTokenCount(
 }
 
 /**
- * 量「转换前」（宿主口径）消息的总字符数：复用 estimatePartTokens 的口径，
- * 只数文本 / 思考 / 工具参数，图片像素不计。
- *
- * 用途：把「实发比」的分母从「转换后」换到「转换前」——r ≈ 实发 ÷ 宿主原始量，
- * 把 convert 阶段丢掉的那一刀（思考块 / 标记等）也算进账，宿主的尺子量到的就
- * ≈ 我们真正发出去的。任何异常都安全返回 0（调用方会退回旧口径）。
+ * Measure raw host text/thinking/tool characters before conversion, independent
+ * of tokenCountMode and skillCatalogKeptShare. Images remain fixed-token parts
+ * and are excluded from this character-only observation. This is neither a
+ * tokenizer nor an authorization to discount anonymous host token counts.
+ * Tool-result recursion must use the same raw-text policy as top-level parts.
  */
 export function estimateMessageChars(
 	messages: readonly vscode.LanguageModelChatRequestMessage[],
@@ -241,7 +243,7 @@ export function estimateMessageChars(
 				continue;
 			}
 			for (const part of content) {
-				total += estimatePartTokens(part).textChars;
+				total += estimatePartTokens(part, true).textChars;
 			}
 		}
 		return total;

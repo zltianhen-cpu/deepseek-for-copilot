@@ -2,7 +2,11 @@
 import { createHash } from 'node:crypto';
 import { safeStringify } from './json';
 import type { DeepSeekUsage } from './types';
-import { newRequestId, recordRequestEvent } from './provider/request-events';
+import {
+	newRequestId,
+	recordRequestEvent,
+	type DiagnosticWriteResult,
+} from './provider/request-events';
 
 export interface RequestTrace {
 	requestId: string;
@@ -24,18 +28,25 @@ export function recordStage(
 	code: string,
 	messages: unknown[],
 	tools?: unknown,
-): void {
+): DiagnosticWriteResult {
 	try {
 		const digests = messages.map((m) => hash(safeStringify(m)));
-		recordRequestEvent(trace.requestId, code, trace.requestKind, trace.parentRequestId, undefined, {
-			historyHash: hash(safeStringify(messages)),
-			schemaHash: hash(safeStringify(tools ?? [])),
-			itemCount: messages.length,
-			sessionRef: trace.sessionRef,
-		});
+		let result = recordRequestEvent(
+			trace.requestId,
+			code,
+			trace.requestKind,
+			trace.parentRequestId,
+			undefined,
+			{
+				historyHash: hash(safeStringify(messages)),
+				schemaHash: hash(safeStringify(tools ?? [])),
+				itemCount: messages.length,
+				sessionRef: trace.sessionRef,
+			},
+		);
 		// 分页记录完整逐消息指纹，单条<=20项以适配既有日志隐私/体积限制。
-		for (let i = 0; i < digests.length; i += 20)
-			recordRequestEvent(
+		for (let i = 0; i < digests.length; i += 20) {
+			const page = recordRequestEvent(
 				trace.requestId,
 				code + '_ITEMS',
 				trace.requestKind,
@@ -43,8 +54,11 @@ export function recordStage(
 				undefined,
 				{ offset: i, fingerprints: digests.slice(i, i + 20) },
 			);
+			if (result.ok && (!page.ok || page.skipped)) result = page;
+		}
+		return result;
 	} catch {
-		/* 指纹诊断不影响聊天。 */
+		return { ok: false, error: 'diag-stage-failed' };
 	}
 }
 export function createSendReceipt(request: object) {

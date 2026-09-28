@@ -50,26 +50,46 @@ export function newRequestId(): string {
 		return 'r-' + randomUUID();
 	}
 }
+// Cache independently by path + mtime + size; retry failed reads on the next event.
+const provenanceFiles = new Map<string, { signature: string; value: string }>();
+function cachedProvenance(file: string, read: (text: string) => string): string {
+	try {
+		const stat = fs.statSync(file);
+		const signature = `${stat.mtimeMs}:${stat.size}`;
+		const cached = provenanceFiles.get(file);
+		if (cached?.signature === signature) return cached.value;
+		const value = read(fs.readFileSync(file, 'utf8'));
+		if (provenanceFiles.size >= 4) provenanceFiles.clear();
+		provenanceFiles.set(file, { signature, value });
+		return value;
+	} catch {
+		provenanceFiles.delete(file);
+		return 'unknown';
+	}
+}
 function provenance(): Record<string, string> {
 	const root = path.join(__dirname, '../..');
 	const dir = process.env.DEEPSEEK_HOOK_DIR ?? path.join(root, 'resources/hooks');
-	const result: Record<string, string> = {
+	return {
 		siteId: 'extension.provider',
-		extensionVersion: 'unknown',
-		hookHash: 'unknown',
+		extensionVersion: cachedProvenance(
+			path.join(root, 'package.json'),
+			(text) => JSON.parse(text).version,
+		),
+		hookHash: cachedProvenance(path.join(dir, 'skill_filter.js'), (text) =>
+			createHash('sha256').update(text).digest('hex'),
+		),
 	};
-	try {
-		result.extensionVersion = JSON.parse(
-			fs.readFileSync(path.join(root, 'package.json'), 'utf8'),
-		).version;
-	} catch {}
-	try {
-		result.hookHash = createHash('sha256')
-			.update(fs.readFileSync(path.join(dir, 'skill_filter.js')))
-			.digest('hex');
-	} catch {}
-	return result;
 }
+
+export function getDiagnosticsStatus(): Record<string, unknown> {
+	try {
+		return eventLog().getStatus();
+	} catch {
+		return { status: 'unavailable' };
+	}
+}
+
 function safeUsage(usage?: Record<string, unknown>): Record<string, number> {
 	const out: Record<string, number> = {};
 	for (const key of ['input', 'output', 'hit', 'miss']) {
@@ -84,10 +104,26 @@ function safeDetails(details?: Record<string, unknown>): Record<string, unknown>
 		const value = details?.[key];
 		if (typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)) out[key] = value;
 	}
-	for (const key of ['wireBytes', 'itemCount', 'offset', 'httpStatus']) {
+	for (const key of [
+		'wireBytes',
+		'itemCount',
+		'offset',
+		'httpStatus',
+		'reasoningRestoredCount',
+		'catalogPatchCount',
+	]) {
 		const value = details?.[key];
 		if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) out[key] = value;
 	}
+	if (
+		typeof details?.sourceRequestId === 'string' &&
+		/^[\w.-]{1,128}$/.test(details.sourceRequestId)
+	)
+		out.sourceRequestId = details.sourceRequestId;
+	if (Array.isArray(details?.patchedMessageIndexes))
+		out.patchedMessageIndexes = details.patchedMessageIndexes
+			.filter((v) => Number.isSafeInteger(v) && v >= 0)
+			.slice(0, 100);
 	if (Array.isArray(details?.fingerprints))
 		out.fingerprints = details.fingerprints
 			.filter((v) => typeof v === 'string' && /^[a-f0-9]{64}$/.test(v))
@@ -146,6 +182,12 @@ function safeChangesetStep(step: Record<string, unknown>): Record<string, unknow
 	return out;
 }
 
+export interface DiagnosticWriteResult {
+	ok: boolean;
+	skipped?: boolean;
+	error?: string;
+}
+
 export function recordRequestEvent(
 	requestId: string,
 	eventCode: string,
@@ -153,11 +195,12 @@ export function recordRequestEvent(
 	parentRequestId?: string,
 	usage?: Record<string, unknown>,
 	details?: Record<string, unknown>,
-): void {
+): DiagnosticWriteResult {
 	try {
-		if (process.env.DEEPSEEK_HOOKS_OFF === '1') return;
-		if (diagnosticsMode === 'minimal' && PROCESS_EVENT_CODES.has(eventCode)) return;
-		eventLog().reportEvent({
+		if (process.env.DEEPSEEK_HOOKS_OFF === '1') return { ok: true, skipped: true };
+		if (diagnosticsMode === 'minimal' && PROCESS_EVENT_CODES.has(eventCode))
+			return { ok: true, skipped: true };
+		const result = eventLog().reportEvent({
 			...provenance(),
 			...safeUsage(usage),
 			...safeDetails(details),
@@ -174,8 +217,18 @@ export function recordRequestEvent(
 			category: requestKind === 'summary' ? 'summary' : 'request',
 			incidentKey: [requestId, eventCode, randomUUID()].join('|'),
 		});
+		if (result?.ok === true) return { ok: true, ...(result.skipped ? { skipped: true } : {}) };
+		const errors = new Set([
+			'diag-directory-budget',
+			'diag-writer-busy',
+			'diag-incident-budget',
+			'diag-line-budget',
+			'diag-write-failed',
+			'diag-unsafe-file',
+		]);
+		return { ok: false, error: errors.has(result?.error) ? result.error : 'diag-event-failed' };
 	} catch {
-		/* 诊断失败不得中断聊天。 */
+		return { ok: false, error: 'diag-event-failed' };
 	}
 }
 export interface ErrorSummaryFilter {

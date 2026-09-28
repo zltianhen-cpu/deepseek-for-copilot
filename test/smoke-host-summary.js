@@ -397,3 +397,24 @@ test('恢复器接口已接入，内存有界且匹配严格', async (t) => {
 		assert.equal((await cache.recover(scope, incoming())).messages[2].reasoning_content, '');
 	});
 });
+
+test('catalog replay reaches real prepare, filter and HTTP body without re-filtering summary', async (t) => {
+ hooks.applyMessageFilter = originalFilter;
+ const block=i=>`<skill><name>fixture-${i}</name><description>${'catalog description '.repeat(30)}</description><file>/skills/fixture-${i}/SKILL.md</file></skill>`;
+ const directory='<skills>'+Array.from({length:100},(_,i)=>block(i)).join('\n')+'</skills>';
+ const history=prefix();history[0]={role:3,content:[new Text('You are an expert AI programming assistant. '+directory)]};
+ const opt=options('catalog-e2e');
+ await prepare(history.slice(0,2),opt);
+ history.push({role:3,content:[new Text('historical instructions '+directory+' outside evidence')]});
+ let calls=0;hooks.applyMessageFilter=async(...args)=>{calls++;return originalFilter(...args)};
+ const main=await prepare(history,opt);
+ assert.ok(JSON.stringify(main.request.messages[4]).length<directory.length,'real catalog must shrink historical directory');
+ const replay=await prepare(summary(history),opt);
+ assert.deepEqual(replay.request.messages.slice(0,-1),main.request.messages);
+ assert.equal(calls,1,'summary cannot mutate main filter state');
+ const wire=[];t.mock.method(global,'fetch',async(_u,o)=>{wire.push(JSON.parse(o.body));return {ok:true,body:{getReader:()=>({read:async()=>({done:true})})}}});
+ await replay.client.streamChatCompletion(replay.request,{onContent(){},onThinking(){},onToolCall(){},onDone(){},onError(e){throw e}});
+ assert.deepEqual(wire[0].messages,replay.request.messages);
+ assert.ok(JSON.stringify(wire[0].messages[3]).includes('example content'),'tool evidence preserved');
+ assert.deepEqual(wire[0].messages.at(-1).content,[{type:'text',text:SUMMARY}]);
+});

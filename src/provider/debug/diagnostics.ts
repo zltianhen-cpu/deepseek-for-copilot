@@ -118,6 +118,8 @@ export interface CacheTraceContentSectionSummary {
 }
 
 export interface CacheTraceSnapshot {
+	/** Diagnostic partition only; never authorizes history replay. */
+	segmentScope?: string;
 	fingerprint: string;
 	requestKind: RequestKind;
 	model: string;
@@ -358,6 +360,7 @@ class DefaultCacheDiagnosticsRecorder implements CacheDiagnosticsRecorder {
 			options.inputMessages,
 			requestKind,
 		);
+		cacheTrace.segmentScope = options.segment.segmentId || `unknown-request-${requestId}`;
 		const previousCacheTrace = this.previousCacheTraces.get(getCacheTraceStoreKey(cacheTrace));
 		const previousImmediateCacheTrace = this.lastCacheTrace;
 		const previousScopedCacheTrace = this.lastCacheTracesByScope.get(
@@ -369,9 +372,7 @@ class DefaultCacheDiagnosticsRecorder implements CacheDiagnosticsRecorder {
 			previousImmediateCacheTrace.cacheTraceKey !== cacheTrace.cacheTraceKey;
 		const sameImmediateComparisonScope =
 			previousImmediateCacheTrace !== undefined &&
-			previousImmediateCacheTrace.requestKind === cacheTrace.requestKind &&
-			previousImmediateCacheTrace.model === cacheTrace.model &&
-			previousImmediateCacheTrace.toolsHash === cacheTrace.toolsHash;
+			getCacheTraceScopeKey(previousImmediateCacheTrace) === getCacheTraceScopeKey(cacheTrace);
 		const traceKeyChangeComparison =
 			previousImmediateCacheTrace && immediateTraceKeyChanged && sameImmediateComparisonScope
 				? compareCacheTraceSnapshots(previousImmediateCacheTrace, cacheTrace)
@@ -498,6 +499,7 @@ class DefaultCacheDiagnosticsRecorder implements CacheDiagnosticsRecorder {
 						` prevModel=${skippedImmediateFallback.model}` +
 						` currModel=${cacheTrace.model}` +
 						` toolsChanged=${skippedImmediateFallback.toolsHash !== cacheTrace.toolsHash}` +
+						` segmentChanged=${skippedImmediateFallback.segmentScope !== cacheTrace.segmentScope}` +
 						` cacheTraceKeyChanged=true skipFallbackDiff=true`,
 				),
 			);
@@ -589,11 +591,16 @@ class DefaultCacheDiagnosticsRecorder implements CacheDiagnosticsRecorder {
 }
 
 function getCacheTraceStoreKey(snapshot: CacheTraceSnapshot): string {
-	return `${snapshot.requestKind}:${snapshot.cacheTraceKey}`;
+	return `${getCacheTraceScopeKey(snapshot)}:${snapshot.cacheTraceKey}`;
 }
 
 function getCacheTraceScopeKey(snapshot: CacheTraceSnapshot): string {
-	return `${snapshot.requestKind}:${snapshot.model}:${snapshot.toolsHash}`;
+	return JSON.stringify([
+		snapshot.segmentScope,
+		snapshot.requestKind,
+		snapshot.model,
+		snapshot.toolsHash,
+	]);
 }
 
 class ActiveCacheDiagnosticsRun implements CacheDiagnosticsRun {

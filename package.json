@@ -3,7 +3,7 @@
 	"displayName": "%displayName%",
 	"description": "Use DeepSeek Flash and V4 Pro in Copilot Chat with image input (reads images, never generates them), Vision Proxy, reasoning, and agent tools.",
 	"icon": "resources/icon.png",
-	"version": "0.0.29",
+	"version": "0.0.34",
 	"publisher": "zltianhen",
 	"license": "MIT",
 	"repository": {
@@ -316,7 +316,7 @@
 		"lint": "oxlint",
 		"format": "oxfmt --write src/",
 		"format:check": "oxfmt --check src/",
-		"test": "for f in test/smoke-*.js; do node \"$f\" || exit 1; done && node tools/check-i18n-models.js",
+		"test": "node tools/run-tests.mjs",
 		"check:publish": "node tools/check-publish.mjs",
 		"package": "node tools/build.mjs",
 		"package:public": "node tools/build.mjs",

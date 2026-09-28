@@ -24,7 +24,15 @@ export function buildReplayScope(
 	return digest([workspace, id, modelShape, endpoint, digest(apiKey)]);
 }
 
+export interface CatalogChange {
+	index: number;
+	before: DeepSeekMessage;
+	after: DeepSeekMessage;
+	kind: 'catalog' | 'addition';
+}
 interface Entry {
+	sourceRequestId?: string;
+	catalog: Map<number, DeepSeekMessage>;
 	scope: string;
 	created: number;
 	bytes: number;
@@ -48,6 +56,9 @@ export interface SummaryReplayResult {
 	status: ReplayStatus;
 	messages?: DeepSeekMessage[];
 	restored: number;
+	catalogRestored?: number;
+	sourceRequestId?: string;
+	catalogIndexes?: number[];
 }
 
 function shape(message: DeepSeekMessage): string {
@@ -71,11 +82,17 @@ export class HostSummaryReplayCache {
 		};
 	}
 
-	begin(scope: string | undefined, messages: readonly DeepSeekMessage[]): Entry | undefined {
+	begin(
+		scope: string | undefined,
+		messages: readonly DeepSeekMessage[],
+		sourceRequestId?: string,
+	): Entry | undefined {
 		if (!scope || !messages.some((message) => message.role === 'assistant')) return undefined;
 		const shapes = messages.map(shape);
 		const reasoning = messages.map((message) => message.reasoning_content);
-		const entry = {
+		const entry: Entry = {
+			sourceRequestId,
+			catalog: new Map(),
 			scope,
 			shapes,
 			reasoning,
@@ -91,8 +108,44 @@ export class HostSummaryReplayCache {
 		return this.entries.has(entry) ? entry : undefined;
 	}
 
+	/** Called only by the trusted catalog mutator, never inferred from arbitrary text. */
+	recordCatalog(entry: Entry | undefined, change: CatalogChange): void {
+		if (!entry || !this.entries.has(entry) || entry.output) return;
+		const { index, before, after, kind } = change;
+		if (
+			!Number.isSafeInteger(index) ||
+			index < 0 ||
+			index >= entry.shapes.length ||
+			(kind !== 'catalog' && kind !== 'addition') ||
+			(before.role !== 'system' && before.role !== 'user')
+		)
+			return;
+		const { content: _beforeContent, ...beforeMeta } = before;
+		const { content: _afterContent, ...afterMeta } = after;
+		if (digest(beforeMeta) !== digest(afterMeta)) return;
+		const previous = entry.catalog.get(index);
+		if (shape(before) !== (previous ? shape(previous) : entry.shapes[index])) return;
+		const saved = copy(after);
+		entry.bytes +=
+			Buffer.byteLength(JSON.stringify(saved)) -
+			(previous ? Buffer.byteLength(JSON.stringify(previous)) : 0);
+		entry.catalog.set(index, saved);
+		this.trim();
+	}
+
 	complete(entry: Entry | undefined, messages: readonly DeepSeekMessage[]): void {
 		if (!entry || !this.entries.has(entry) || entry.output) return;
+		// Any later fold/rewrite invalidates affected mappings; retain full summary history.
+		for (const [index, patch] of entry.catalog) {
+			if (
+				messages.length !== entry.shapes.length ||
+				!messages[index] ||
+				shape(messages[index]) !== shape(patch)
+			) {
+				entry.bytes -= Buffer.byteLength(JSON.stringify(patch));
+				entry.catalog.delete(index);
+			}
+		}
 		entry.output = copy([...messages]);
 		entry.bytes += Buffer.byteLength(JSON.stringify(entry.output));
 		this.trim();
@@ -124,6 +177,12 @@ export class HostSummaryReplayCache {
 			);
 			if (new Set(candidates.map((entry) => digest(entry.reasoning))).size > 1)
 				return no('conflict');
+			const completed = candidates.filter((item) => item.output);
+			if (
+				new Set(completed.map((item) => digest([...item.catalog].sort((a, b) => a[0] - b[0]))))
+					.size > 1
+			)
+				return no('conflict');
 			const entry = candidates.at(-1);
 			if (entry) {
 				if (
@@ -139,7 +198,11 @@ export class HostSummaryReplayCache {
 						if (!restored[i].reasoning_content && entry.reasoning[i])
 							restored[i].reasoning_content = entry.reasoning[i];
 					}
+					for (const [index, patch] of entry.catalog) restored[index].content = copy(patch.content);
 					return {
+						catalogRestored: entry.catalog.size,
+						catalogIndexes: [...entry.catalog.keys()],
+						sourceRequestId: entry.sourceRequestId,
 						status: 'restored',
 						restored: history.filter(
 							(message, i) => !message.reasoning_content && entry.reasoning[i],

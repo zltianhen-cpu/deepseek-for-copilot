@@ -66,6 +66,9 @@ export const REAL_TURN_KIND = 'main-agent';
 
 /** 出门前折叠用的会话钥匙。空串 = 钩子退回 fp:首条 user。 */
 export interface MessageFilterContext {
+	/** Only provider-certified adopted history may bypass host-shape hold. */
+	managedHostSummary?: boolean;
+	catalogReplay?: (change: import('./replay/host-summary').CatalogChange) => void;
 	requestId?: string;
 	/** 宿主会话的严格身份；仅用于同链技能区复用，不参与折叠钥匙。 */
 	hostSummaryKey?: string;
@@ -103,6 +106,9 @@ interface MonitorModule {
 
 /** 传给探针的单轮用量记录（字段名与 `context_monitor.logUsage` 对齐）。 */
 export interface UsageRecord {
+	requestId?: string;
+	parentRequestId?: string;
+	sessionRef?: string;
 	prompt: number;
 	cacheHit: number;
 	/** 官方响应里可缺省；探针侧会用 prompt - cacheHit 兜底。 */
@@ -266,34 +272,46 @@ export async function applyMessageFilter(
 			signal: ctx?.signal,
 			storePath: ctx?.storePath,
 			summarize: ctx?.summarize,
+			managedHostSummary: ctx?.managedHostSummary === true,
 			fitsBudget: ctx?.fitsBudget,
 			protectedPrefixCount: ctx?.protectedPrefixCount,
 			tools: ctx?.tools,
 			sourceSidecar: ctx?.sourceSidecar,
+			catalogReplay: ctx?.catalogReplay,
 		});
 		if (out && typeof (out as Promise<unknown>).then === 'function') {
 			await out;
 		}
 		rememberFilteredSkills(ctx?.hostSummaryKey ?? '', [originalSystem], messages);
 
-		// 只观察前后体积；不向无会话身份的宿主计数发布折扣。
-		// 宿主数的是未折叠的原文，折叠/筛选省下的量它看不见 → 它会在原文很大时就
-		// 提前压缩；报出真实比值后，它的尺子量到的就 ≈ 我们真正发出去的。
-		// 分母优先用「转换前的宿主口径」（hostMessageChars，request.ts 传入）——
-		// 它含 convert 阶段丢掉的那一刀（思考块/标记等），r ≈ 实发 ÷ 宿主原始量；
-		// 缺省（未传 / 样本太小）退回「转换后」的本地量（与旧口径一致）。
+		// Character-only observation of the filtered candidate, not final wire tokens.
+		// A counting call has no session identity; never publish this as a discount.
 		const afterChars = safeCountMessageChars(messages);
-		const hostChars = ctx?.hostMessageChars ?? 0;
-		const baseChars = hostChars >= MIN_RATIO_SAMPLE_CHARS ? hostChars : beforeChars;
-		if (baseChars >= MIN_RATIO_SAMPLE_CHARS && afterChars > 0) {
+		const suppliedHostChars = ctx?.hostMessageChars ?? 0;
+		const hostChars =
+			Number.isFinite(suppliedHostChars) && suppliedHostChars > 0 ? suppliedHostChars : 0;
+		const useHost = hostChars >= MIN_RATIO_SAMPLE_CHARS;
+		const baseChars = useHost ? hostChars : beforeChars;
+		if (
+			Number.isFinite(baseChars) &&
+			baseChars >= MIN_RATIO_SAMPLE_CHARS &&
+			Number.isFinite(afterChars) &&
+			afterChars > 0
+		) {
 			const ratio = afterChars / baseChars;
+			const requestId =
+				typeof ctx?.requestId === 'string' && /^[\w.-]{1,128}$/.test(ctx.requestId)
+					? ctx.requestId
+					: 'unknown';
 			logger.info(
 				'[fold-ratio]',
-				`host=${hostChars} conv=${beforeChars} out=${afterChars} r=${ratio.toFixed(3)} msgs=${beforeCount}->${messages.length}`,
+				`host=${hostChars} conv=${beforeChars} out=${afterChars} r=${ratio.toFixed(3)} msgs=${beforeCount}->${messages.length}` +
+					` requestId=${requestId} unit=characters basis=${useHost ? 'host-raw' : 'converted'}` +
+					' phase=filtered-candidate hostDiscount=disabled',
 			);
 		}
 	} catch {
-		// 钩子异常 → 比值清零，退回「技能目录折减」口径（宁可多算，不冒撞上限的险）
+		// Hook failure emits no ratio observation; host token counting is unchanged.
 		/* HOOK: never break chat */
 	}
 }
@@ -314,7 +332,11 @@ export function applyHostSummarySkills(messages: unknown[], ctx?: MessageFilterC
  * tools 一并交给探针：工具 schema 同属 provider 前缀，schema 漂移会静默打断缓存，
  * 探针据此算 ToolsHash 并在变化时点名（对齐 Reasonix cache_shape.go 的 ToolsHash）。
  */
-export function logMessageComposition(messages: unknown[], tools?: unknown): void {
+export function logMessageComposition(
+	messages: unknown[],
+	tools?: unknown,
+	trace?: { requestId: string; sessionRef: string },
+): void {
 	if (!HOOKS_ENABLED) {
 		return;
 	}
@@ -322,7 +344,10 @@ export function logMessageComposition(messages: unknown[], tools?: unknown): voi
 		// ⛔ 不给 tools 时不能传「值为 undefined 的 tools 键」——探针用 'tools' in opts
 		//    区分「调用方没采集」和「本轮真的没有工具」，带 undefined 键会把两者混成
 		//    后者（空集哈希），排查时会误判成「工具全没了」。
-		const opts: { vscode: unknown; tools?: unknown } = { vscode };
+		const opts: { vscode: unknown; tools?: unknown; requestId?: string; sessionRef?: string } = {
+			vscode,
+			...trace,
+		};
 		if (tools !== undefined) {
 			opts.tools = tools;
 		}

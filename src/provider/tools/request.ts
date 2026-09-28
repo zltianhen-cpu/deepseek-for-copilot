@@ -1,5 +1,6 @@
 import vscode from 'vscode';
 import { t } from '../../i18n';
+import { logger } from '../../logger';
 import type { DeepSeekMessage, DeepSeekTool } from '../../types';
 import { convertTools } from '../convert';
 import { DEEPSEEK_TOOLS_LIMIT } from './consts';
@@ -40,7 +41,26 @@ export function prepareRequestTools(
 	if (toolsCount > toolLimit) {
 		throw new Error(t('request.toolsLimitExceeded', toolLimit, toolsCount));
 	}
-	return tools;
+	return stabilizeToolOrder(tools);
+}
+
+// Canonicalize before replay scope, diagnostics and HTTP share this list.
+// Only array order changes; current tool definitions always remain authoritative.
+function stabilizeToolOrder(tools: DeepSeekTool[] | undefined): DeepSeekTool[] | undefined {
+	if (!tools?.length) return tools;
+	const names = new Set<string>();
+	for (const tool of tools) {
+		const name = tool.function.name;
+		if (typeof name !== 'string' || name.length === 0 || names.has(name)) {
+			// Ambiguous/invalid names must not be silently merged or reprioritized.
+			logger.warn('[TOOLS_ORDER_SKIPPED] Invalid or duplicate tool name; preserving order.');
+			return tools;
+		}
+		names.add(name);
+	}
+	return [...tools].sort((a, b) =>
+		a.function.name < b.function.name ? -1 : a.function.name > b.function.name ? 1 : 0,
+	);
 }
 
 function stabilizeMermaidTool(tools: DeepSeekTool[] | undefined): DeepSeekTool[] | undefined {

@@ -1,3 +1,5 @@
+import { recordRequestEvent } from './request-events';
+import { createHash } from 'node:crypto';
 import { createSessionTextStream } from './session-paths';
 import vscode from 'vscode';
 import { createUserFacingError } from '../client';
@@ -43,6 +45,16 @@ export function streamChatCompletion({
 	getCharsPerToken,
 	setCharsPerToken,
 }: StreamChatCompletionOptions): Promise<void> {
+	if (prepared.localDelivery) {
+		return Promise.resolve().then(() => {
+			if (token?.isCancellationRequested) throw new Error('Local summary delivery cancelled');
+			if (!prepared.localDelivery!.markSent())
+				throw new Error('Local summary delivery journal unavailable');
+			progress.report(new vscode.LanguageModelTextPart(prepared.localDelivery!.text));
+			recordRequestEvent(prepared.requestId, 'LOCAL_SUMMARY_SENT_PENDING', prepared.requestKind);
+			// No API call, no fabricated usage, no claim that the host adopted the result.
+		});
+	}
 	const state: ResponseStreamState = {
 		accumulatedReasoning: '',
 		emittedToolCallIds: [],
@@ -126,6 +138,10 @@ export function streamChatCompletion({
 						}
 					).completion_tokens_details?.reasoning_tokens;
 					logUsage({
+						requestId: prepared.requestId,
+						sessionRef: prepared.segment?.segmentId
+							? createHash('sha256').update(prepared.segment?.segmentId).digest('hex')
+							: undefined,
 						prompt: usage.prompt_tokens,
 						cacheHit: usage.prompt_cache_hit_tokens ?? 0,
 						cacheMiss: usage.prompt_cache_miss_tokens,

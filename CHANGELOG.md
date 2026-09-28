@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.0.34
+
+- Reuse certified skill catalog transformations for host-generated summaries while preserving complete conversation evidence.
+- Keep summary processing read-only, reject ambiguous or stale mappings, and report catalog restoration separately from reasoning restoration.
+- Add historical catalog, provenance, isolation, and serialized request regression coverage.
+
+## 0.0.33
+
+- Stabilize outgoing tool order before replay identity and request construction.
+- Preserve tool definitions and additions/removals; retain original order for ambiguous names.
+- Add regression coverage for tool rotation and streaming, completion, and folding requests.
+
+## 0.0.32
+
+- Reclaim eligible inactive diagnostic logs and coordinate bounded storage across writers.
+- Cache maintenance and provenance work; expose diagnostic drop counters.
+- Isolate smoke-test storage and enforce a temporary-directory write boundary.
+- Make diagnostic budget fixtures independent of process IDs and test order.
+
+## 0.0.31
+
+- Isolate cache diagnostics by conversation segment, request kind, model, and tools.
+- Rebuild skill routing indexes only when indexed content or ordered roots change.
+- Measure raw host text consistently and label character-ratio observations without changing host token estimates.
+
+## 0.0.30
+
+- Record folding summary usage, including rejected and retried responses, without affecting request delivery.
+- Add request and hashed conversation correlation to local usage and composition diagnostics.
+- Report skill block counts by message role; preserve outgoing prompt content.
+
 ## 0.0.29
 
 - Restore the explicitly selected slash-command skill name next to VS Code's generic `#prompt:SKILL.md` reference before every early-return path.

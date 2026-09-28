@@ -93,3 +93,32 @@ test('总时间预算耗尽不发送第二次且计数真实',async t=>{
  t.mock.method(global,'fetch',async()=>{n++;now=60001;return {ok:true,json:async()=>({choices:[{finish_reason:'length',message:{content:'partial'}}]})}});
  const f=makeFoldSummarize(client,'deepseek-flash');assert.equal(await f(request.messages),'');assert.equal(n,1);assert.equal(f.lastDiagnostic.requests,1);assert.equal(f.lastDiagnostic.reason,'timeout');
 });
+for (const finish of ['stop', 'length', 'tool_calls', 'content_filter', undefined]) {
+ for (const content of ['summary', '']) {
+  test('usage observed even for rejected summary '+finish+' '+Boolean(content),async t=>{
+   const usage={prompt_tokens:100,prompt_cache_hit_tokens:80,prompt_cache_miss_tokens:20,completion_tokens:5};
+   t.mock.method(global,'fetch',async()=>({ok:true,status:200,json:async()=>({usage,choices:[{finish_reason:finish,message:{content}}]})}));
+   const seen=[];
+   try { await client.completeChat(request,1000,undefined,u=>seen.push(u)); } catch {}
+   assert.deepEqual(seen,[usage]);
+  });
+ }
+}
+test('usage observer failure does not reject complete summary',async t=>{
+ t.mock.method(global,'fetch',async()=>({ok:true,status:200,json:async()=>({usage:{prompt_tokens:1,completion_tokens:1},choices:[{finish_reason:'stop',message:{content:'ok'}}]})}));
+ assert.equal(await client.completeChat(request,1000,undefined,()=>{throw Error('observer');}),'ok');
+});
+test('missing usage does not create fabricated observation',async t=>{
+ response(t,'stop','ok');const seen=[];await client.completeChat(request,1000,undefined,u=>seen.push(u));assert.deepEqual(seen,[]);
+});
+test('fold retries each deliver their billed usage',async t=>{
+ let n=0;const seen=[];
+ t.mock.method(global,'fetch',async()=>({ok:true,status:200,json:async()=>({usage:{prompt_tokens:++n,completion_tokens:1},choices:[{finish_reason:n===1?'length':'stop',message:{content:'ok'}}]})}));
+ const f=makeFoldSummarize(client,'test',undefined,undefined,undefined,DEFAULT_BUDGET_POLICY,u=>seen.push(u.prompt_tokens));
+ assert.equal(await f(request.messages),'ok');assert.deepEqual(seen,[1,2]);
+});
+for(const [name,extra] of [['tool_calls',{tool_calls:[{id:'call',type:'function',function:{name:'forbidden',arguments:'{}'}}]}],['function_call',{function_call:{name:'forbidden',arguments:'{}'}}]])test('stop carrying '+name+' still rejected without execution',async t=>{
+ t.mock.method(global,'fetch',async()=>({ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'not a safe summary',...extra}}]})}));
+ await assert.rejects(client.completeChat(request,1000),e=>e.code==='invalid-finish');
+ const f=makeFoldSummarize(client,'test');assert.equal(await f(request.messages),'');assert.equal(f.lastDiagnostic.reason,'invalid-finish');
+});
